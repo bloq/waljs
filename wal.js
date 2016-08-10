@@ -12,6 +12,7 @@ program
 	.option('--accountNew <name>', 'Create new account')
 	.option('--accountDefault <name>', 'Set default account to <name>')
 	.option('--addressNew', 'Generate new address for default account')
+	.option('--addressLast', 'Show most recently generated address for default account')
 	.parse(process.argv);
 
 var wallet = null;
@@ -102,16 +103,28 @@ function cmdAccountDefault(acctName)
 	}
 }
 
-function cmdAccountAddress()
+function cmdAccountAddress(newAddr)
 {
 	var privkeyObj = wallet.privkeys[0];
 	var acctObj = wallet.accounts[wallet.defaultAccount];
+
+	var keyIndex;
+	if (newAddr)
+		keyIndex = acctObj.nextKey;
+	else {
+		if (acctObj.nextKey == 0) {
+			console.error("no key yet generated");
+			return;
+		}
+
+		keyIndex = acctObj.nextKey - 1;
+	}
 
 	// Verify this is BIP 44 etc. compatible
 	var hdpath_hard = "m/44'/0'/" +
 		     acctObj.index.toString() + "'";
 	var hdpath_pub = "m/0/" +
-		     acctObj.nextKey.toString();
+		     keyIndex.toString();
 
 	// Get pubkey for hardened path
 	var hdpriv = new bitcore.HDPrivateKey(privkeyObj.data);
@@ -122,11 +135,13 @@ function cmdAccountAddress()
 	var address = new bitcore.Address(hdpub.derive(hdpath_pub).publicKey,
 					  bitcore.Networks.livenet);
 
-	// Output generated key
+	// Output [generated] address
 	console.log(address.toString());
 
-	acctObj.nextKey++;
-	modified = true;
+	if (newAddr) {
+		acctObj.nextKey++;
+		modified = true;
+	}
 }
 
 if (program.create) {
@@ -141,7 +156,9 @@ else if (program.accountNew)
 else if (program.accountDefault)
 	cmdAccountDefault(program.accountDefault);
 else if (program.addressNew)
-	cmdAccountAddress();
+	cmdAccountAddress(true);
+else if (program.addressLast)
+	cmdAccountAddress(false);
 
 if (modified)
 	walletWrite();
