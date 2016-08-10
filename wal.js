@@ -102,17 +102,22 @@ function cmdAccountAddress()
 	var privkeyObj = wallet.privkeys[0];
 	var acctObj = wallet.accounts[wallet.defaultAccount];
 
-	var hdpath = "m/44'/0'/" +
-		     acctObj.index.toString() + "'/" +
-		     "0/" +
+	// Verify this is BIP 44 etc. compatible
+	var hdpath_hard = "m/44'/0'/" +
+		     acctObj.index.toString() + "'";
+	var hdpath_pub = "m/0/" +
 		     acctObj.nextKey.toString();
 
+	// Get pubkey for hardened path
 	var hdpriv = new bitcore.HDPrivateKey(privkeyObj.data);
-	var derivedKey = hdpriv.derive(hdpath);
+	var derivedKey = hdpriv.derive(hdpath_hard);
 	var hdpub = derivedKey.hdPublicKey;
-	var address = new bitcore.Address(hdpub.publicKey,
+
+	// Derive address for public path
+	var address = new bitcore.Address(hdpub.derive(hdpath_pub).publicKey,
 					  bitcore.Networks.livenet);
 
+	// Output generated key
 	console.log(address.toString());
 
 	acctObj.nextKey++;
