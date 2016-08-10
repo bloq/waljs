@@ -52,31 +52,35 @@ function cacheRead()
 	if (program.cache) cacheFn = program.cache;
 	if (fs.existsSync(cacheFn))
 		cache = JSON.parse(fs.readFileSync(cacheFn, 'utf8'));
-	else
+	else {
 		cache = {
 			peers: {},
 
-			firstScanBlock: "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1",
 			lastScannedBlock: null,
 			matchAddresses: {},
 		};
+		cacheModified = true;
+	}
 
 	if (program.cacheChain) bcacheFn = program.cacheChain;
 	if (fs.existsSync(bcacheFn))
 		bcache = JSON.parse(fs.readFileSync(bcacheFn, 'utf8'));
-	else
+	else {
 		bcache = {
 			blocks: {
-			 "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1": {
-				"height": 420000,
-				"time": 1468082773,
-				"merkleroot": "028323a5bcacb0057274ee0a4366e5671278bc736b57176d9bb929c3a69e0ffa",
-				"previousblockhash":"000000000000000003035bc31911d3eea46c8a23b36d6d558141d1d09cc960cf",
+			 "000000000000000001910d9f594aea0950d580d08c07ec324d0573bd3272ae86": {
+				"height": 423000,
+				"time": 1469961500,
+				"merkleroot": "9ea055f22d0906eb8492985b7b5350de95b4942278d00d234108e39ad8c509b3",
+				"previousblockhash":"000000000000000003797cd09efa8c88e0d5c4c26712250c9f977aa6a2371d33",
 			 }
 			},
+			firstScanBlock: "000000000000000001910d9f594aea0950d580d08c07ec324d0573bd3272ae86",
 			bestBlock: null,
 			wantHeader: null,
 		};
+		bcacheModified = true;
+	}
 }
 
 function cacheWrite()
@@ -353,13 +357,14 @@ function cmdSyncHeaders()
 function cmdScanBlocks()
 {
 	if (!cache.lastScannedBlock)
-		cache.lastScannedBlock = cache.firstScanBlock;
+		cache.lastScannedBlock = bcache.firstScanBlock;
 
 	rpcInfoRead();
 
 	const rpc = new RpcClient(rpcInfoObj);
 	var n_scanned = 0;
 	var n_tx_scanned = 0;
+	var curtime = Date.now();
 
 	async.until(function tester() {
 		return (cache.lastScannedBlock == bcache.bestBlock);
@@ -384,6 +389,13 @@ function cmdScanBlocks()
 
 			cache.lastScannedBlock = scanHash;
 			cacheModified = true;
+
+			if ((Date.now() - curtime) > (7*1000)) {
+				console.log("Progress: " + n_scanned.toString() + " blocks, " +
+				    n_tx_scanned.toString() + " TXs scanned.");
+
+				curtime = Date.now();
+			}
 
 			n_tx_scanned += block.transactions.length;
 			n_scanned++;
