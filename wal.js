@@ -11,7 +11,8 @@ program
 	.version('0.0.1')
 	.option('-f, --file <path>', 'Wallet file')
 	.option('--rpcinfo <path>', 'bitcoind RPC credentials & configuration')
-	.option('--cache <path>', 'Cache file')
+	.option('--cache <path>', 'Wallet cache file')
+	.option('--cacheChain <path>', 'Blockchain cache file')
 	.option('--create', 'Create new wallet')
 	.option('--check', 'Validate wallet integrity')
 	.option('--accountNew <name>', 'Create new account')
@@ -34,6 +35,10 @@ var cache = null;
 var cacheFn = 'cache-wal.json';
 var cacheModified = false;
 
+var bcache = null;
+var bcacheFn = 'cache-blocks.json';
+var bcacheModified = false;
+
 var rpcInfoFn = program.rpcinfo || 'rpc-info.json';
 var rpcInfoObj = null;
 
@@ -51,6 +56,16 @@ function cacheRead()
 		cache = {
 			peers: {},
 
+			firstScanBlock: "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1",
+			lastScannedBlock: null,
+			matchAddresses: {},
+		};
+
+	if (program.cacheChain) bcacheFn = program.cacheChain;
+	if (fs.existsSync(bcacheFn))
+		bcache = JSON.parse(fs.readFileSync(bcacheFn, 'utf8'));
+	else
+		bcache = {
 			blocks: {
 			 "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1": {
 				"height": 420000,
@@ -61,36 +76,18 @@ function cacheRead()
 			},
 			bestBlock: null,
 			wantHeader: null,
-
-			firstScanBlock: "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1",
-			lastScannedBlock: null,
-			matchAddresses: {},
 		};
 }
 
 function cacheWrite()
 {
-	if (!cacheModified)
-		return;
+	if (cacheModified)
+		fs.writeFileSync(cacheFn, JSON.stringify(cache, null, 2) + "\n");
+	if (bcacheModified)
+		fs.writeFileSync(bcacheFn, JSON.stringify(bcache, null, 2) + "\n");
 
-	fs.writeFile(cacheFn + ".tmp", JSON.stringify(cache, null, 2) + "\n",
-		     function (err) {
-		if (err) {
-			console.error("Write failed for " + cacheFn + ".tmp: " + err);
-			return;
-		}
-
-		fs.rename(cacheFn + ".tmp", cacheFn, function (err) {
-			if (err) {
-				console.error("Rename failed for " + cacheFn + ".tmp: " + err);
-				return;
-			}
-
-			cacheModified = false;
-		});
-	});
-
-
+	cacheModified = false;
+	bcacheModified = false;
 }
 
 function cacheNetPeer(addr)
@@ -294,9 +291,9 @@ function downloadHeaders(rpc)
 	var n_headers = 0;
 
 	async.until(function tester() {
-		return (cache.wantHeader && (cache.wantHeader in cache.blocks));
+		return (bcache.wantHeader && (bcache.wantHeader in bcache.blocks));
 	}, function iteree(callback) {
-		var scanHash = cache.wantHeader;
+		var scanHash = bcache.wantHeader;
 		rpc.getBlockHeader(scanHash, function(err, res) {
 			if (err) {
 				console.error("Block header failed, " + err);
@@ -312,13 +309,13 @@ function downloadHeaders(rpc)
 				nextblockhash: res.result.nextblockhash || null,
 			};
 
-			cache.blocks[scanHash] = obj;
-			if (obj.previousblockhash in cache.blocks)
-				cache.blocks[obj.previousblockhash].nextblockhash = scanHash;
-			cacheModified = true;
+			bcache.blocks[scanHash] = obj;
+			if (obj.previousblockhash in bcache.blocks)
+				bcache.blocks[obj.previousblockhash].nextblockhash = scanHash;
+			bcacheModified = true;
 
 			if (obj.previousblockhash && obj.height > 0)
-				cache.wantHeader = obj.previousblockhash;
+				bcache.wantHeader = obj.previousblockhash;
 
 			n_headers++;
 			callback();
@@ -326,7 +323,7 @@ function downloadHeaders(rpc)
 	}, function done() {
 		cacheWrite();
 		console.log(n_headers.toString() + " headers downloaded.");
-		console.log("Tip " + cache.bestBlock);
+		console.log("Tip " + bcache.bestBlock);
 	});
 }
 
@@ -343,11 +340,11 @@ function cmdSyncHeaders()
 
 		var newBestBlock = res.result;
 
-		if (newBestBlock != cache.bestBlock) {
-			cache.bestBlock = res.result;
-			cacheModified = true;
+		if (newBestBlock != bcache.bestBlock) {
+			bcache.bestBlock = res.result;
+			bcacheModified = true;
 
-			cache.wantHeader = cache.bestBlock;
+			bcache.wantHeader = bcache.bestBlock;
 			downloadHeaders(rpc);
 		}
 	});
@@ -365,15 +362,15 @@ function cmdScanBlocks()
 	var n_tx_scanned = 0;
 
 	async.until(function tester() {
-		return (cache.lastScannedBlock == cache.bestBlock);
+		return (cache.lastScannedBlock == bcache.bestBlock);
 	}, function iteree(callback) {
-		const scanHash = cache.blocks[cache.lastScannedBlock].nextblockhash;
+		const scanHash = bcache.blocks[cache.lastScannedBlock].nextblockhash;
 		if (!scanHash) {
 			callback();
 			return;
 		}
 
-		const blockHdr = cache.blocks[scanHash];
+		const blockHdr = bcache.blocks[scanHash];
 
 		rpc.getBlock(scanHash, false, function(err, res) {
 			if (err) {
