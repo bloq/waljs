@@ -248,6 +248,7 @@ function cmdAccountAddress(newAddr)
 		var matchObj = {
 			address: addressStr,
 			createTime: now.toISOString(),
+			account: acctObj.name,
 			acctIndex: acctObj.index,
 			keyIndex: keyIndex,
 			change: false,
