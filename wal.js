@@ -1,23 +1,72 @@
 #!/usr/bin/env nodejs
 
 const fs = require('fs');
+const dns = require('dns');
 const program = require('commander');
 const bitcore = require('bitcore-lib');
+const async = require('async');
 
 program
 	.version('0.0.1')
 	.option('-f, --file <path>', 'Wallet file')
+	.option('--cache <path>', 'Cache file')
 	.option('--create', 'Create new wallet')
 	.option('--check', 'Validate wallet integrity')
 	.option('--accountNew <name>', 'Create new account')
 	.option('--accountDefault <name>', 'Set default account to <name>')
+	.option('--accountList', 'List accounts')
 	.option('--addressNew', 'Generate new address for default account')
 	.option('--addressLast', 'Show most recently generated address for default account')
+	.option('--netSeed', 'Seed network peer list via DNS')
 	.parse(process.argv);
 
+var network = bitcore.Networks.livenet;
+
 var wallet = null;
-var walletFn = 'stor-wallet-keys.json';
+var walletFn = 'keys-wal.json';
 var modified = false;
+
+var cache = null;
+var cacheFn = 'cache-wal.json';
+var cacheModified = false;
+
+function cacheRead()
+{
+	if (program.cache) cacheFn = program.cache;
+	if (fs.existsSync(cacheFn))
+		cache = JSON.parse(fs.readFileSync(cacheFn, 'utf8'));
+	else
+		cache = {
+			peers: {},
+		};
+}
+
+function cacheWrite()
+{
+	if (!cacheModified)
+		return;
+
+	fs.writeFileSync(cacheFn + ".tmp", JSON.stringify(cache, null, 2) + "\n");
+	fs.renameSync(cacheFn + ".tmp", cacheFn);
+
+	cacheModified = false;
+}
+
+function cacheNetPeer(addr)
+{
+	if (addr in cache.peers)
+		return;
+
+	var now = new Date();
+
+	var peerObj = {
+		address: addr,
+		createTime: now.toISOString(),
+	};
+
+	cache.peers[addr] = peerObj;
+	cacheModified = true;
+}
 
 function walletRead()
 {
@@ -27,10 +76,15 @@ function walletRead()
 
 function walletWrite()
 {
+	if (!modified)
+		return;
+
 	if (fs.existsSync(walletFn))
 		fs.renameSync(walletFn, walletFn + ".bak");
 
 	fs.writeFileSync(walletFn, JSON.stringify(wallet, null, 2) + "\n");
+
+	modified = false;
 }
 
 function walletCreate()
@@ -68,6 +122,13 @@ function cmdCheck()
 	});
 
 	console.log("Keys checked: " + n_checked.toString());
+}
+
+function cmdAccountList()
+{
+	Object.keys(wallet.accounts).forEach(function(acctName) {
+		console.log(acctName);
+	});
 }
 
 function cmdAccountNew(acctName)
@@ -133,7 +194,7 @@ function cmdAccountAddress(newAddr)
 
 	// Derive address for public path
 	var address = new bitcore.Address(hdpub.derive(hdpath_pub).publicKey,
-					  bitcore.Networks.livenet);
+					  network);
 
 	// Output [generated] address
 	console.log(address.toString());
@@ -144,10 +205,42 @@ function cmdAccountAddress(newAddr)
 	}
 }
 
+function cmdNetSeed()
+{
+	var seeds = network.dnsSeeds;
+
+	var lenStart = Object.keys(cache.peers).length;
+
+	async.each(seeds, function iteree(hostname, cb) {
+		console.log("Looking up " + hostname);
+		dns.resolve4(hostname, function (err, addresses) {
+			if (err) {
+				cb(err);
+				return;
+			}
+
+			addresses.forEach(function(addr) {
+				cacheNetPeer(addr);
+			});
+
+			cb();
+		});
+	}, function done() {
+		cacheWrite();
+
+		var lenEnd = Object.keys(cache.peers).length;
+		var lenDiff = lenEnd - lenStart;
+
+		console.log("Peers seeded from DNS.  New peers discovered: " + lenDiff.toString());
+	});
+
+}
+
 if (program.create) {
 	walletCreate();
 } else
 	walletRead();
+cacheRead();
 
 if (program.check)
 	cmdCheck();
@@ -155,11 +248,15 @@ else if (program.accountNew)
 	cmdAccountNew(program.accountNew);
 else if (program.accountDefault)
 	cmdAccountDefault(program.accountDefault);
+else if (program.accountList)
+	cmdAccountList();
 else if (program.addressNew)
 	cmdAccountAddress(true);
 else if (program.addressLast)
 	cmdAccountAddress(false);
+else if (program.netSeed)
+	cmdNetSeed();
 
-if (modified)
-	walletWrite();
+walletWrite();
+cacheWrite();
 
