@@ -49,6 +49,7 @@ function cacheRead()
 	else
 		cache = {
 			peers: {},
+
 			blocks: {
 			 "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1": {
 				"height": 420000,
@@ -59,6 +60,8 @@ function cacheRead()
 			},
 			bestBlock: null,
 			wantHeader: null,
+
+			matchAddresses: {},
 		};
 }
 
@@ -232,11 +235,25 @@ function cmdAccountAddress(newAddr)
 					  network);
 
 	// Output [generated] address
-	console.log(address.toString());
+	var addressStr = address.toString();
+	console.log(addressStr);
 
 	if (newAddr) {
+		var now = new Date();
+
+		var matchObj = {
+			address: addressStr,
+			createTime: now.toISOString(),
+			acctIndex: acctObj.index,
+			keyIndex: keyIndex,
+			change: false,
+		};
+
 		acctObj.nextKey++;
 		modified = true;
+
+		cache.matchAddresses[addressStr] = matchObj;
+		cacheModified = true;
 	}
 }
 
