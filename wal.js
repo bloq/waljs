@@ -9,6 +9,8 @@ program
 	.option('-f, --file <path>', 'Wallet file')
 	.option('--create', 'Create new wallet')
 	.option('--check', 'Validate wallet integrity')
+	.option('--accountNew <name>', 'Create new account')
+	.option('--accountDefault <name>', 'Set default account to <name>')
 	.parse(process.argv);
 
 var wallet = null;
@@ -37,7 +39,12 @@ function walletCreate()
 		privkeys: [
 			{ typ: "xpriv", 
 			  data: hdPrivateKey.toString(), }
-		]
+		],
+		accounts: {
+			master: { name: "master", code: 0 }
+		},
+		defaultAccount: "master",
+		nextCode: 1,
 	};
 }
 
@@ -59,6 +66,35 @@ function cmdCheck()
 	console.log("Keys checked: " + n_checked.toString());
 }
 
+function cmdAccountNew(acctName)
+{
+	if (acctName in wallet.accounts) {
+		console.error("Duplicate account name");
+		return;
+	}
+
+	var obj = {
+		name: acctName,
+		code: wallet.nextCode,
+	};
+
+	wallet.accounts[acctName] = obj;
+	wallet.nextCode++;
+
+	modified = true;
+}
+
+function cmdAccountDefault(acctName)
+{
+	if (acctName in wallet.accounts) {
+		wallet.defaultAccount = acctName;
+		modified = true;
+	} else {
+		console.error("unknown account");
+		return;
+	}
+}
+
 if (program.create) {
 	walletCreate();
 	modified = true;
@@ -67,6 +103,10 @@ if (program.create) {
 
 if (program.check)
 	cmdCheck();
+else if (program.accountNew)
+	cmdAccountNew(program.accountNew);
+else if (program.accountDefault)
+	cmdAccountDefault(program.accountDefault);
 
 if (modified)
 	walletWrite();
