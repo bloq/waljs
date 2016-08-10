@@ -41,12 +41,14 @@ function walletCreate()
 			{ typ: "xpriv", 
 			  data: hdPrivateKey.toString(), }
 		],
-		accounts: {
-			master: { name: "master", index: 0, nextKey: 0 }
-		},
+		accounts: {},
 		defaultAccount: "master",
-		nextIndex: 1,
+		nextIndex: 0,
 	};
+
+	cmdAccountNew("master");
+
+	modified = true;
 }
 
 function cmdCheck()
@@ -74,10 +76,13 @@ function cmdAccountNew(acctName)
 		return;
 	}
 
+	var now = new Date();
+
 	var obj = {
 		name: acctName,
 		index: wallet.nextIndex,
 		nextKey: 0,
+		createTime: now.toISOString(),
 	};
 
 	wallet.accounts[acctName] = obj;
@@ -126,7 +131,6 @@ function cmdAccountAddress()
 
 if (program.create) {
 	walletCreate();
-	modified = true;
 } else
 	walletRead();
 
