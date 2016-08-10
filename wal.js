@@ -5,7 +5,7 @@ const dns = require('dns');
 const program = require('commander');
 const async = require('async');
 const bitcore = require('bitcore-lib');
-const rpc = require('bitcoind-rpc');
+const RpcClient = require('bitcoind-rpc');
 
 program
 	.version('0.0.1')
@@ -20,6 +20,7 @@ program
 	.option('--addressNew', 'Generate new address for default account')
 	.option('--addressLast', 'Show most recently generated address for default account')
 	.option('--netSeed', 'Seed network peer list via DNS')
+	.option('--syncHeaders', 'Cache block headers for best chain')
 	.parse(process.argv);
 
 var network = bitcore.Networks.livenet;
@@ -48,6 +49,16 @@ function cacheRead()
 	else
 		cache = {
 			peers: {},
+			blocks: {
+			 "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1": {
+				"height": 420000,
+				"time": 1468082773,
+				"merkleroot": "028323a5bcacb0057274ee0a4366e5671278bc736b57176d9bb929c3a69e0ffa",
+				"previousblockhash":"000000000000000003035bc31911d3eea46c8a23b36d6d558141d1d09cc960cf",
+			 }
+			},
+			bestBlock: null,
+			wantHeader: null,
 		};
 }
 
@@ -258,6 +269,66 @@ function cmdNetSeed()
 	});
 }
 
+function downloadHeaders(rpc)
+{
+	var n_headers = 0;
+
+	async.until(function tester() {
+		return (cache.wantHeader && (cache.wantHeader in cache.blocks));
+	}, function iteree(callback) {
+		rpc.getBlockHeader(cache.wantHeader, function(err, res) {
+			if (err) {
+				console.error("Block header failed, " + err);
+				callback(err);
+				return;
+			}
+
+			var obj = {
+				height: res.result.height,
+				time: res.result.time,
+				merkleroot: res.result.merkleroot,
+				previousblockhash: res.result.previousblockhash,
+			};
+
+			cache.blocks[cache.wantHeader] = obj;
+			cacheModified = true;
+
+			if (obj.previousblockhash && obj.height > 0)
+				cache.wantHeader = obj.previousblockhash;
+
+			n_headers++;
+			callback();
+		});
+	}, function done() {
+		cacheWrite();
+		console.log(n_headers.toString() + " headers downloaded.");
+		console.log("Tip " + cache.bestBlock);
+	});
+}
+
+function cmdSyncHeaders()
+{
+	rpcInfoRead();
+
+	const rpc = new RpcClient(rpcInfoObj);
+	rpc.getBestBlockHash(function(err, res) {
+		if (err) {
+			console.error("Cannot get best block hash: " + err);
+			return;
+		}
+
+		var newBestBlock = res.result;
+
+		if (newBestBlock != cache.bestBlock) {
+			cache.bestBlock = res.result;
+			cacheModified = true;
+
+			cache.wantHeader = cache.bestBlock;
+			downloadHeaders(rpc);
+		}
+	});
+}
+
 if (program.create) {
 	walletCreate();
 } else
@@ -278,6 +349,8 @@ else if (program.addressLast)
 	cmdAccountAddress(false);
 else if (program.netSeed)
 	cmdNetSeed();
+else if (program.syncHeaders)
+	cmdSyncHeaders();
 
 walletWrite();
 cacheWrite();
