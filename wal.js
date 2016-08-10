@@ -19,8 +19,9 @@ program
 	.option('--accountList', 'List accounts')
 	.option('--addressNew', 'Generate new address for default account')
 	.option('--addressLast', 'Show most recently generated address for default account')
-	.option('--netSeed', 'Seed network peer list via DNS')
+	.option('--seedNet', 'Seed network peer list via DNS')
 	.option('--syncHeaders', 'Cache block headers for best chain')
+	.option('--scanBlocks', 'Scan blocks for impactful UTXO activity')
 	.parse(process.argv);
 
 var network = bitcore.Networks.livenet;
@@ -61,6 +62,8 @@ function cacheRead()
 			bestBlock: null,
 			wantHeader: null,
 
+			firstScanBlock: "000000000000000002cce816c0ab2c5c269cb081896b7dcb34b8422d6b74ffa1",
+			lastScannedBlock: null,
 			matchAddresses: {},
 		};
 }
@@ -293,7 +296,8 @@ function downloadHeaders(rpc)
 	async.until(function tester() {
 		return (cache.wantHeader && (cache.wantHeader in cache.blocks));
 	}, function iteree(callback) {
-		rpc.getBlockHeader(cache.wantHeader, function(err, res) {
+		var scanHash = cache.wantHeader;
+		rpc.getBlockHeader(scanHash, function(err, res) {
 			if (err) {
 				console.error("Block header failed, " + err);
 				callback(err);
@@ -304,10 +308,13 @@ function downloadHeaders(rpc)
 				height: res.result.height,
 				time: res.result.time,
 				merkleroot: res.result.merkleroot,
-				previousblockhash: res.result.previousblockhash,
+				previousblockhash: res.result.previousblockhash || null,
+				nextblockhash: res.result.nextblockhash || null,
 			};
 
-			cache.blocks[cache.wantHeader] = obj;
+			cache.blocks[scanHash] = obj;
+			if (obj.previousblockhash in cache.blocks)
+				cache.blocks[obj.previousblockhash].nextblockhash = scanHash;
 			cacheModified = true;
 
 			if (obj.previousblockhash && obj.height > 0)
@@ -346,6 +353,52 @@ function cmdSyncHeaders()
 	});
 }
 
+function cmdScanBlocks()
+{
+	if (!cache.lastScannedBlock)
+		cache.lastScannedBlock = cache.firstScanBlock;
+
+	rpcInfoRead();
+
+	const rpc = new RpcClient(rpcInfoObj);
+	var n_scanned = 0;
+	var n_tx_scanned = 0;
+
+	async.until(function tester() {
+		return (cache.lastScannedBlock == cache.bestBlock);
+	}, function iteree(callback) {
+		const scanHash = cache.blocks[cache.lastScannedBlock].nextblockhash;
+		if (!scanHash) {
+			callback();
+			return;
+		}
+
+		const blockHdr = cache.blocks[scanHash];
+
+		rpc.getBlock(scanHash, false, function(err, res) {
+			if (err) {
+				console.error("Cannot get block: " + err);
+				return;
+			}
+
+			var block = new bitcore.Block(new Buffer(res.result, 'hex'));
+
+			// TODO - scan block
+
+			cache.lastScannedBlock = scanHash;
+			cacheModified = true;
+
+			n_tx_scanned += block.transactions.length;
+			n_scanned++;
+			callback();
+		});
+	}, function done() {
+		cacheWrite();
+		console.log(n_scanned.toString() + " blocks, " +
+			    n_tx_scanned.toString() + " TXs scanned.");
+	});
+}
+
 if (program.create) {
 	walletCreate();
 } else
@@ -364,10 +417,12 @@ else if (program.addressNew)
 	cmdAccountAddress(true);
 else if (program.addressLast)
 	cmdAccountAddress(false);
-else if (program.netSeed)
+else if (program.seedNet)
 	cmdNetSeed();
 else if (program.syncHeaders)
 	cmdSyncHeaders();
+else if (program.scanBlocks)
+	cmdScanBlocks();
 
 walletWrite();
 cacheWrite();
