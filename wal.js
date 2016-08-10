@@ -3,12 +3,14 @@
 const fs = require('fs');
 const dns = require('dns');
 const program = require('commander');
-const bitcore = require('bitcore-lib');
 const async = require('async');
+const bitcore = require('bitcore-lib');
+const rpc = require('bitcoind-rpc');
 
 program
 	.version('0.0.1')
 	.option('-f, --file <path>', 'Wallet file')
+	.option('--rpcinfo <path>', 'bitcoind RPC credentials & configuration')
 	.option('--cache <path>', 'Cache file')
 	.option('--create', 'Create new wallet')
 	.option('--check', 'Validate wallet integrity')
@@ -29,6 +31,14 @@ var modified = false;
 var cache = null;
 var cacheFn = 'cache-wal.json';
 var cacheModified = false;
+
+var rpcInfoFn = program.rpcinfo || 'rpc-info.json';
+var rpcInfoObj = null;
+
+function rpcInfoRead()
+{
+	rpcInfoObj = JSON.parse(fs.readFileSync(rpcInfoFn, 'utf8'));
+}
 
 function cacheRead()
 {
