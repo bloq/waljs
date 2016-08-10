@@ -11,6 +11,7 @@ program
 	.option('--check', 'Validate wallet integrity')
 	.option('--accountNew <name>', 'Create new account')
 	.option('--accountDefault <name>', 'Set default account to <name>')
+	.option('--addressNew', 'Generate new address for default account')
 	.parse(process.argv);
 
 var wallet = null;
@@ -41,7 +42,7 @@ function walletCreate()
 			  data: hdPrivateKey.toString(), }
 		],
 		accounts: {
-			master: { name: "master", index: 0 }
+			master: { name: "master", index: 0, nextKey: 0 }
 		},
 		defaultAccount: "master",
 		nextIndex: 1,
@@ -76,6 +77,7 @@ function cmdAccountNew(acctName)
 	var obj = {
 		name: acctName,
 		index: wallet.nextIndex,
+		nextKey: 0,
 	};
 
 	wallet.accounts[acctName] = obj;
@@ -95,6 +97,28 @@ function cmdAccountDefault(acctName)
 	}
 }
 
+function cmdAccountAddress()
+{
+	var privkeyObj = wallet.privkeys[0];
+	var acctObj = wallet.accounts[wallet.defaultAccount];
+
+	var hdpath = "m/44'/0'/" +
+		     acctObj.index.toString() + "'/" +
+		     "0/" +
+		     acctObj.nextKey.toString();
+
+	var hdpriv = new bitcore.HDPrivateKey(privkeyObj.data);
+	var derivedKey = hdpriv.derive(hdpath);
+	var hdpub = derivedKey.hdPublicKey;
+	var address = new bitcore.Address(hdpub.publicKey,
+					  bitcore.Networks.livenet);
+
+	console.log(address.toString());
+
+	acctObj.nextKey++;
+	modified = true;
+}
+
 if (program.create) {
 	walletCreate();
 	modified = true;
@@ -107,6 +131,8 @@ else if (program.accountNew)
 	cmdAccountNew(program.accountNew);
 else if (program.accountDefault)
 	cmdAccountDefault(program.accountDefault);
+else if (program.addressNew)
+	cmdAccountAddress();
 
 if (modified)
 	walletWrite();
