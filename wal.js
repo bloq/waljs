@@ -41,10 +41,10 @@ function walletCreate()
 			  data: hdPrivateKey.toString(), }
 		],
 		accounts: {
-			master: { name: "master", code: 0 }
+			master: { name: "master", index: 0 }
 		},
 		defaultAccount: "master",
-		nextCode: 1,
+		nextIndex: 1,
 	};
 }
 
@@ -75,11 +75,11 @@ function cmdAccountNew(acctName)
 
 	var obj = {
 		name: acctName,
-		code: wallet.nextCode,
+		index: wallet.nextIndex,
 	};
 
 	wallet.accounts[acctName] = obj;
-	wallet.nextCode++;
+	wallet.nextIndex++;
 
 	modified = true;
 }
