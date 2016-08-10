@@ -46,10 +46,24 @@ function cacheWrite()
 	if (!cacheModified)
 		return;
 
-	fs.writeFileSync(cacheFn + ".tmp", JSON.stringify(cache, null, 2) + "\n");
-	fs.renameSync(cacheFn + ".tmp", cacheFn);
+	fs.writeFile(cacheFn + ".tmp", JSON.stringify(cache, null, 2) + "\n",
+		     function (err) {
+		if (err) {
+			console.error("Write failed for " + cacheFn + ".tmp: " + err);
+			return;
+		}
 
-	cacheModified = false;
+		fs.rename(cacheFn + ".tmp", cacheFn, function (err) {
+			if (err) {
+				console.error("Rename failed for " + cacheFn + ".tmp: " + err);
+				return;
+			}
+
+			cacheModified = false;
+		});
+	});
+
+
 }
 
 function cacheNetPeer(addr)
@@ -212,7 +226,6 @@ function cmdNetSeed()
 	var lenStart = Object.keys(cache.peers).length;
 
 	async.each(seeds, function iteree(hostname, cb) {
-		console.log("Looking up " + hostname);
 		dns.resolve4(hostname, function (err, addresses) {
 			if (err) {
 				cb(err);
@@ -233,7 +246,6 @@ function cmdNetSeed()
 
 		console.log("Peers seeded from DNS.  New peers discovered: " + lenDiff.toString());
 	});
-
 }
 
 if (program.create) {
