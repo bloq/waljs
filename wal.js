@@ -58,6 +58,8 @@ function cacheRead()
 
 			lastScannedBlock: null,
 			matchAddresses: {},
+			unspent: {},
+			myTx: {},
 		};
 		cacheModified = true;
 	}
@@ -355,6 +357,30 @@ function cmdSyncHeaders()
 	});
 }
 
+function scanBlock(block)
+{
+	block.transactions.forEach(function(tx) {
+		var matchTxout = [];
+
+		for (var i = 0; i < tx.outputs.length; i++) {
+			var txout = tx.outputs[i];
+			var addr = txout.script.toAddress();
+			if (addr && (addr.toString() in cache.matchAddresses)) {
+
+				var id = tx.hash + "," + i.toString();
+
+				matchTxout.push(id);
+				cache.unspent[id] = txout;
+			}
+		}
+
+		if (matchTxout.length > 0) {
+			cache.myTx[tx.hash] = tx.toObject();
+			cacheModified = true;
+		}
+	});
+}
+
 function cmdScanBlocks()
 {
 	if (!cache.lastScannedBlock)
@@ -386,7 +412,7 @@ function cmdScanBlocks()
 
 			var block = new bitcore.Block(new Buffer(res.result, 'hex'));
 
-			// TODO - scan block
+			scanBlock(block);
 
 			cache.lastScannedBlock = scanHash;
 			cacheModified = true;
