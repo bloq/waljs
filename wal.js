@@ -20,6 +20,7 @@ program
 	.option('--accountList', 'List accounts')
 	.option('--addressNew', 'Generate new address for default account')
 	.option('--addressLast', 'Show most recently generated address for default account')
+	.option('--txList', 'List wallet transactions')
 	.option('--seedNet', 'Seed network peer list via DNS')
 	.option('--syncHeaders', 'Cache block headers for best chain')
 	.option('--scanBlocks', 'Scan blocks for impactful UTXO activity')
@@ -559,6 +560,21 @@ function cmdSpend(spendFn)
 	console.log(tx.toString());
 }
 
+function cmdTxList()
+{
+	var txlist = [];
+
+	for (var txid in cache.myTx) {
+		var obj = {
+			txid: txid,
+		};
+
+		txlist.push(obj);
+	}
+
+	console.log(JSON.stringify(txlist, null, 2) + "\n");
+}
+
 if (program.create) {
 	walletCreate();
 } else
@@ -585,6 +601,8 @@ else if (program.scanBlocks)
 	cmdScanBlocks();
 else if (program.spend)
 	cmdSpend(program.spend);
+else if (program.txList)
+	cmdTxList();
 
 walletWrite();
 cacheWrite();
