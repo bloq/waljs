@@ -386,10 +386,15 @@ function scanBlock(block)
 				var id = tx.hash + "," + i.toString();
 
 				matchTxout.push(id);
-				cache.unspent[id] = txout;
-				cache.unspent[id].address = addr.toString();
-				cache.unspent[id].txid = tx.hash;
-				cache.unspent[id].vout = i;
+
+				var unspentObj = {
+					txid: tx.hash,
+					vout: i,
+					address: addr.toString(),
+					script: txout.script.toHex(),
+					satoshis: txout.satoshis,
+				};
+				cache.unspent[id] = unspentObj;
 			}
 		}
 
