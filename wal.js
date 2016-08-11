@@ -170,9 +170,23 @@ function cmdCheck()
 
 function cmdAccountList()
 {
+	var accts = {};
 	Object.keys(wallet.accounts).forEach(function(acctName) {
-		console.log(acctName);
+		var obj = {
+			name: acctName,
+			satoshis: 0,
+		};
+
+		accts[acctName] = obj;
 	});
+
+	for (var utxoId in cache.unspent) {
+		var utxo = cache.unspent[utxoId];
+		var addrInfo = cache.matchAddresses[utxo.address];
+		accts[addrInfo.account].satoshis += utxo.satoshis;
+	}
+
+	console.log(JSON.stringify(accts, null, 2) + "\n");
 }
 
 function cmdAccountNew(acctName)
@@ -371,6 +385,8 @@ function scanBlock(block)
 
 				matchTxout.push(id);
 				cache.unspent[id] = txout;
+				cache.unspent[id].address = addr.toString();
+
 			}
 		}
 
