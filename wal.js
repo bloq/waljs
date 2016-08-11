@@ -375,6 +375,7 @@ function scanBlock(block)
 {
 	block.transactions.forEach(function(tx) {
 		var matchTxout = [];
+		var matchTxin = [];
 
 		for (var i = 0; i < tx.outputs.length; i++) {
 			var txout = tx.outputs[i];
@@ -386,11 +387,24 @@ function scanBlock(block)
 				matchTxout.push(id);
 				cache.unspent[id] = txout;
 				cache.unspent[id].address = addr.toString();
-
+				cache.unspent[id].txid = tx.hash;
+				cache.unspent[id].vout = i;
 			}
 		}
 
-		if (matchTxout.length > 0) {
+		for (var i = 0; i < tx.inputs.length; i++) {
+			var txin = tx.inputs[i];
+
+			var id = txin.prevTxId.toString('hex') + "," + txin.outputIndex.toString();
+
+			if (id in cache.unspent) {
+				delete cache.unspent[id];
+				matchTxin.push(id);
+			}
+		}
+
+		if ((matchTxout.length > 0) || (matchTxin > 0)) {
+			console.log("New wallet TX " + tx.hash);
 			cache.myTx[tx.hash] = tx.toObject();
 			cacheModified = true;
 		}
