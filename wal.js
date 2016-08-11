@@ -51,6 +51,7 @@ function rpcInfoRead()
 
 function cacheRead()
 {
+	// Read wallet cache
 	if (program.cache) cacheFn = program.cache;
 	if (fs.existsSync(cacheFn))
 		cache = JSON.parse(fs.readFileSync(cacheFn, 'utf8'));
@@ -66,6 +67,7 @@ function cacheRead()
 		cacheModified = true;
 	}
 
+	// Read blockchain cache
 	if (program.cacheChain) bcacheFn = program.cacheChain;
 	if (fs.existsSync(bcacheFn))
 		bcache = JSON.parse(fs.readFileSync(bcacheFn, 'utf8'));
@@ -172,6 +174,7 @@ function cmdCheck()
 
 function cmdAccountList()
 {
+	// Generate list of wallets
 	var accts = {};
 	Object.keys(wallet.accounts).forEach(function(acctName) {
 		var obj = {
@@ -182,6 +185,7 @@ function cmdAccountList()
 		accts[acctName] = obj;
 	});
 
+	// For each UTXO, assign to an account
 	for (var utxoId in cache.unspent) {
 		var utxo = cache.unspent[utxoId];
 		var addrInfo = cache.matchAddresses[utxo.address];
@@ -229,6 +233,7 @@ function cmdAccountAddress(newAddr)
 	var privkeyObj = wallet.privkeys[0];
 	var acctObj = wallet.accounts[wallet.defaultAccount];
 
+	// Select last|next key to display|generate
 	var keyIndex;
 	if (newAddr)
 		keyIndex = acctObj.nextKey;
@@ -260,6 +265,7 @@ function cmdAccountAddress(newAddr)
 	var addressStr = address.toString();
 	console.log(addressStr);
 
+	// If creating a new address, store new cache entry
 	if (newAddr) {
 		var now = new Date();
 
@@ -286,6 +292,7 @@ function cmdNetSeed()
 
 	var lenStart = Object.keys(cache.peers).length;
 
+	// Async resolve for each DNS seed
 	async.each(seeds, function iteree(hostname, cb) {
 		dns.resolve4(hostname, function (err, addresses) {
 			if (err) {
@@ -300,6 +307,8 @@ function cmdNetSeed()
 			cb();
 		});
 	}, function done() {
+
+		// Store updated cache
 		cacheWrite();
 
 		var lenEnd = Object.keys(cache.peers).length;
@@ -313,6 +322,8 @@ function downloadHeaders(rpc)
 {
 	var n_headers = 0;
 
+	// Request headers, starting from most recent, moving earlier in
+	// time until we reach a header hash we've seen before.
 	async.until(function tester() {
 		return (bcache.wantHeader && (bcache.wantHeader in bcache.blocks));
 	}, function iteree(callback) {
@@ -324,6 +335,7 @@ function downloadHeaders(rpc)
 				return;
 			}
 
+			// Build block header cache entry
 			var obj = {
 				height: res.result.height,
 				time: res.result.time,
@@ -332,11 +344,13 @@ function downloadHeaders(rpc)
 				nextblockhash: res.result.nextblockhash || null,
 			};
 
+			// Store in cache; attach to doubly-linked list
 			bcache.blocks[scanHash] = obj;
 			if (obj.previousblockhash in bcache.blocks)
 				bcache.blocks[obj.previousblockhash].nextblockhash = scanHash;
 			bcacheModified = true;
 
+			// Advance to previous block
 			if (obj.previousblockhash && obj.height > 0)
 				bcache.wantHeader = obj.previousblockhash;
 
@@ -354,6 +368,7 @@ function cmdSyncHeaders()
 {
 	rpcInfoRead();
 
+	// Ask server for chain tip (most recent block)
 	const rpc = new RpcClient(rpcInfoObj);
 	rpc.getBestBlockHash(function(err, res) {
 		if (err) {
@@ -363,6 +378,8 @@ function cmdSyncHeaders()
 
 		var newBestBlock = res.result;
 
+		// If best-block is different (new blocks or reorg),
+		// initiate header download
 		if (newBestBlock != bcache.bestBlock) {
 			bcache.bestBlock = res.result;
 			bcacheModified = true;
@@ -375,10 +392,12 @@ function cmdSyncHeaders()
 
 function scanBlock(block)
 {
+	// Iterate through each transaction in the block
 	block.transactions.forEach(function(tx) {
 		var matchTxout = [];
 		var matchTxin = [];
 
+		// Scan outputs for addresses we know
 		for (var i = 0; i < tx.outputs.length; i++) {
 			var txout = tx.outputs[i];
 			var addr = txout.script.toAddress();
@@ -399,6 +418,7 @@ function scanBlock(block)
 			}
 		}
 
+		// Scan inputs for UTXOs we own
 		for (var i = 0; i < tx.inputs.length; i++) {
 			var txin = tx.inputs[i];
 
@@ -410,6 +430,7 @@ function scanBlock(block)
 			}
 		}
 
+		// Cache entire TX, if ours
 		if ((matchTxout.length > 0) || (matchTxin > 0)) {
 			console.log("New wallet TX " + tx.hash);
 			cache.myTx[tx.hash] = tx.toObject();
@@ -420,9 +441,11 @@ function scanBlock(block)
 
 function cmdScanBlocks()
 {
+	// If scan ptr not set, set to earliest known block
 	if (!cache.lastScannedBlock)
 		cache.lastScannedBlock = bcache.firstScanBlock;
 
+	// Init bitcoind RPC
 	rpcInfoRead();
 
 	const rpc = new RpcClient(rpcInfoObj);
@@ -430,6 +453,7 @@ function cmdScanBlocks()
 	var n_tx_scanned = 0;
 	var curtime = Date.now();
 
+	// Download and scan each block, from ptr to chain tip
 	async.until(function tester() {
 		return (cache.lastScannedBlock == bcache.bestBlock);
 	}, function iteree(callback) {
@@ -441,19 +465,24 @@ function cmdScanBlocks()
 
 		const blockHdr = bcache.blocks[scanHash];
 
+		// Download block
 		rpc.getBlock(scanHash, false, function(err, res) {
 			if (err) {
 				console.error("Cannot get block: " + err);
 				return;
 			}
 
+			// Decode raw block
 			var block = new bitcore.Block(new Buffer(res.result, 'hex'));
 
+			// Scan transactions in block
 			scanBlock(block);
 
+			// Advanced pointer
 			cache.lastScannedBlock = scanHash;
 			cacheModified = true;
 
+			// Show progress indicator
 			if ((Date.now() - curtime) > (7*1000)) {
 				console.log("Progress: " + n_scanned.toString() + " blocks, " +
 				    n_tx_scanned.toString() + " TXs scanned.");
@@ -461,11 +490,13 @@ function cmdScanBlocks()
 				curtime = Date.now();
 			}
 
+			// Update stats
 			n_tx_scanned += block.transactions.length;
 			n_scanned++;
 			callback();
 		});
 	}, function done() {
+		// Flush updated cache
 		cacheWrite();
 		console.log(n_scanned.toString() + " blocks, " +
 			    n_tx_scanned.toString() + " TXs scanned.");
@@ -537,6 +568,7 @@ function cmdSpend(spendFn)
 	var addressStr = changeAddr.toString();
 	var now = new Date();
 
+	// Build new match object for new change address
 	var matchObj = {
 		address: addressStr,
 		createTime: now.toISOString(),
@@ -546,17 +578,21 @@ function cmdSpend(spendFn)
 		change: true,
 	};
 
+	// Store match obj in cache
 	acctObj.nextKey++;
 	modified = true;
 
 	cache.matchAddresses[addressStr] = matchObj;
 	cacheModified = true;
 
+	// Generate and sign bitcoin transaction
 	var tx = new bitcore.Transaction()
 		.from(acctUtxos)
 		.to(spendInfo.to.address, spendInfo.to.satoshis)
 		.change(changeAddr)
 		.sign(privkeys);
+
+	// Output transaction (hex) to console
 	console.log(tx.toString());
 }
 
@@ -575,12 +611,18 @@ function cmdTxList()
 	console.log(JSON.stringify(txlist, null, 2) + "\n");
 }
 
+//
+// Main program operation starts here
+//
+
+// Initialize configuration, read caches and key dbs
 if (program.create) {
 	walletCreate();
 } else
 	walletRead();
 cacheRead();
 
+// Execute specified command
 if (program.check)
 	cmdCheck();
 else if (program.accountNew)
@@ -604,6 +646,7 @@ else if (program.spend)
 else if (program.txList)
 	cmdTxList();
 
+// Flush caches and wallet db, if not already done so inline
 walletWrite();
 cacheWrite();
 
