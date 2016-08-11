@@ -23,6 +23,7 @@ program
 	.option('--seedNet', 'Seed network peer list via DNS')
 	.option('--syncHeaders', 'Cache block headers for best chain')
 	.option('--scanBlocks', 'Scan blocks for impactful UTXO activity')
+	.option('--spend <path>', 'Create new transaction, spending UTXOs')
 	.parse(process.argv);
 
 var network = bitcore.Networks.livenet;
@@ -465,6 +466,94 @@ function cmdScanBlocks()
 	});
 }
 
+function privkeyFromAddress(addr)
+{
+	var matchObj = cache.matchAddresses[addr];
+
+	// Verify this is BIP 44 etc. compatible
+	var hdpath_hard = "m/44'/0'/" +
+		     matchObj.acctIndex.toString() + "'";
+	var hdpath_pub = "m/";
+	if (matchObj.change)
+		hdpath_pub += "1/";
+	else	hdpath_pub += "0/";
+	hdpath_pub += matchObj.keyIndex.toString();
+
+	// Get pubkey for hardened path
+	var privkeyObj = wallet.privkeys[0];
+	var hdpriv = new bitcore.HDPrivateKey(privkeyObj.data);
+	var derivedKey1 = hdpriv.derive(hdpath_hard);
+	var derivedKey2 = derivedKey1.derive(hdpath_pub);
+
+	return derivedKey2.privateKey;
+}
+
+function cmdSpend(spendFn)
+{
+	spendInfo = JSON.parse(fs.readFileSync(spendFn, 'utf8'));
+	var account = spendInfo.account;
+	var acctObj = wallet.accounts[account];
+
+	// List UTXOs for this account
+	var acctUtxos = [];
+	var privkeys = [];
+	for (var utxoId in cache.unspent) {
+		var utxo = cache.unspent[utxoId];
+		var addrInfo = cache.matchAddresses[utxo.address];
+		if (addrInfo.account == account) {
+			var utxoObj = new bitcore.Transaction.UnspentOutput(utxo);
+			acctUtxos.push(utxoObj);
+			privkeys.push(privkeyFromAddress(utxoObj.address));
+		}
+	}
+
+	//
+	// Generate change address
+	//
+
+	// Verify this is BIP 44 etc. compatible
+	var keyIndex = acctObj.nextKey;
+	var hdpath_hard = "m/44'/0'/" +
+		     acctObj.index.toString() + "'";
+	var hdpath_pub = "m/1/" +
+		     keyIndex.toString();
+
+	// Get pubkey for hardened path
+	var privkeyObj = wallet.privkeys[0];
+	var hdpriv = new bitcore.HDPrivateKey(privkeyObj.data);
+	var derivedKey = hdpriv.derive(hdpath_hard);
+	var hdpub = derivedKey.hdPublicKey;
+
+	// Derive address for public path
+	var changeAddr = new bitcore.Address(hdpub.derive(hdpath_pub).publicKey,
+					  network);
+
+	var addressStr = changeAddr.toString();
+	var now = new Date();
+
+	var matchObj = {
+		address: addressStr,
+		createTime: now.toISOString(),
+		account: acctObj.name,
+		acctIndex: acctObj.index,
+		keyIndex: keyIndex,
+		change: true,
+	};
+
+	acctObj.nextKey++;
+	modified = true;
+
+	cache.matchAddresses[addressStr] = matchObj;
+	cacheModified = true;
+
+	var tx = new bitcore.Transaction()
+		.from(acctUtxos)
+		.to(spendInfo.to.address, spendInfo.to.satoshis)
+		.change(changeAddr)
+		.sign(privkeys);
+	console.log(tx.toString());
+}
+
 if (program.create) {
 	walletCreate();
 } else
@@ -489,6 +578,8 @@ else if (program.syncHeaders)
 	cmdSyncHeaders();
 else if (program.scanBlocks)
 	cmdScanBlocks();
+else if (program.spend)
+	cmdSpend(program.spend);
 
 walletWrite();
 cacheWrite();
