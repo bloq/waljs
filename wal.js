@@ -390,53 +390,56 @@ function cmdSyncHeaders()
 	});
 }
 
+function scanTx(tx)
+{
+	var matchTxout = [];
+	var matchTxin = [];
+
+	// Scan outputs for addresses we know
+	for (var i = 0; i < tx.outputs.length; i++) {
+		var txout = tx.outputs[i];
+		var addr = txout.script.toAddress();
+		if (addr && (addr.toString() in cache.matchAddresses)) {
+
+			var id = tx.hash + "," + i.toString();
+
+			matchTxout.push(id);
+
+			var unspentObj = {
+				txid: tx.hash,
+				vout: i,
+				address: addr.toString(),
+				script: txout.script.toHex(),
+				satoshis: txout.satoshis,
+			};
+			cache.unspent[id] = unspentObj;
+		}
+	}
+
+	// Scan inputs for UTXOs we own
+	for (var i = 0; i < tx.inputs.length; i++) {
+		var txin = tx.inputs[i];
+
+		var id = txin.prevTxId.toString('hex') + "," + txin.outputIndex.toString();
+
+		if (id in cache.unspent) {
+			delete cache.unspent[id];
+			matchTxin.push(id);
+		}
+	}
+
+	// Cache entire TX, if ours
+	if ((matchTxout.length > 0) || (matchTxin > 0)) {
+		console.log("New wallet TX " + tx.hash);
+		cache.myTx[tx.hash] = tx.toObject();
+		cacheModified = true;
+	}
+}
+
 function scanBlock(block)
 {
 	// Iterate through each transaction in the block
-	block.transactions.forEach(function(tx) {
-		var matchTxout = [];
-		var matchTxin = [];
-
-		// Scan outputs for addresses we know
-		for (var i = 0; i < tx.outputs.length; i++) {
-			var txout = tx.outputs[i];
-			var addr = txout.script.toAddress();
-			if (addr && (addr.toString() in cache.matchAddresses)) {
-
-				var id = tx.hash + "," + i.toString();
-
-				matchTxout.push(id);
-
-				var unspentObj = {
-					txid: tx.hash,
-					vout: i,
-					address: addr.toString(),
-					script: txout.script.toHex(),
-					satoshis: txout.satoshis,
-				};
-				cache.unspent[id] = unspentObj;
-			}
-		}
-
-		// Scan inputs for UTXOs we own
-		for (var i = 0; i < tx.inputs.length; i++) {
-			var txin = tx.inputs[i];
-
-			var id = txin.prevTxId.toString('hex') + "," + txin.outputIndex.toString();
-
-			if (id in cache.unspent) {
-				delete cache.unspent[id];
-				matchTxin.push(id);
-			}
-		}
-
-		// Cache entire TX, if ours
-		if ((matchTxout.length > 0) || (matchTxin > 0)) {
-			console.log("New wallet TX " + tx.hash);
-			cache.myTx[tx.hash] = tx.toObject();
-			cacheModified = true;
-		}
-	});
+	block.transactions.forEach(scanTx);
 }
 
 function cmdScanBlocks()
