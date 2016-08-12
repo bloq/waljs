@@ -1,5 +1,6 @@
 #!/usr/bin/env nodejs
 
+const assert = require('assert');
 const fs = require('fs');
 const dns = require('dns');
 const program = require('commander');
@@ -17,7 +18,7 @@ program
 	.option('--check', 'Validate wallet integrity')
 	.option('--accountNew <name>', 'Create new account')
 	.option('--accountDefault <name>', 'Set default account to <name>')
-	.option('--accountList', 'List accounts')
+	.option('--accountList', 'List accounts and balances')
 	.option('--addressNew', 'Generate new address for default account')
 	.option('--addressLast', 'Show most recently generated address for default account')
 	.option('--txList', 'List wallet transactions')
@@ -170,7 +171,15 @@ function cmdCheck()
 		n_checked++;
 	});
 
-	console.log("Keys checked: " + n_checked.toString());
+	assert('version' in wallet);
+	assert(wallet.version > 0);
+	assert('accounts' in wallet);
+	assert(Object.keys(wallet.accounts).length > 0);
+	assert('defaultAccount' in wallet);
+	assert(wallet.defaultAccount in wallet.accounts);
+	assert('nextIndex' in wallet);
+
+	console.log("All checks succeeded.");
 }
 
 function cmdAccountList()
