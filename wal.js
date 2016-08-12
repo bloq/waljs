@@ -190,6 +190,8 @@ function cmdAccountList()
 		var utxo = cache.unspent[utxoId];
 		var addrInfo = cache.matchAddresses[utxo.address];
 		accts[addrInfo.account].satoshis += utxo.satoshis;
+		accts[addrInfo.account].btc =
+			bitcore.Unit.fromSatoshis(accts[addrInfo.account].satoshis).toBTC();
 	}
 
 	console.log(JSON.stringify(accts, null, 2) + "\n");
@@ -432,6 +434,7 @@ function scanTx(tx)
 	if ((matchTxout.length > 0) || (matchTxin > 0)) {
 		console.log("New wallet TX " + tx.hash);
 		cache.myTx[tx.hash] = tx.toObject();
+		cache.myTx[tx.hash].raw = tx.toString();
 		cacheModified = true;
 	}
 }
@@ -588,6 +591,9 @@ function cmdSpend(spendFn)
 	cache.matchAddresses[addressStr] = matchObj;
 	cacheModified = true;
 
+	if ('btc' in spendInfo.to)
+		spendInfo.to.satoshis = bitcore.Unit.fromBTC(spendInfo.to.btc).toSatoshis();
+
 	// Generate and sign bitcoin transaction
 	var tx = new bitcore.Transaction()
 		.from(acctUtxos)
@@ -595,8 +601,29 @@ function cmdSpend(spendFn)
 		.change(changeAddr)
 		.sign(privkeys);
 
+	// Add new tx to internal cache
+	scanTx(tx);
+
+	// Sync db
+	walletWrite();
+	cacheWrite();
+
 	// Output transaction (hex) to console
 	console.log(tx.toString());
+
+	// Init bitcoind RPC
+	rpcInfoRead();
+
+	const rpc = new RpcClient(rpcInfoObj);
+
+	rpc.sendRawTransaction(tx.toString(), function (err, res) {
+		if (err) {
+			console.error("Send TX failed, " + err);
+			return;
+		}
+
+		console.log("Sent txid " + tx.hash);
+	});
 }
 
 function cmdTxList()
