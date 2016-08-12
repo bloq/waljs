@@ -24,6 +24,7 @@ program
 	.option('--seedNet', 'Seed network peer list via DNS')
 	.option('--syncHeaders', 'Cache block headers for best chain')
 	.option('--scanBlocks', 'Scan blocks for impactful UTXO activity')
+	.option('--rescanPtr <hash>', 'Reset block scan pointer to given hash')
 	.option('--spend <path>', 'Create new transaction, spending UTXOs')
 	.parse(process.argv);
 
@@ -641,6 +642,19 @@ function cmdTxList()
 	console.log(JSON.stringify(txlist, null, 2) + "\n");
 }
 
+function cmdRescanPtr(hash)
+{
+	if (!(hash in bcache.blocks)) {
+		console.error("Hash not found in cache: " + hash);
+		return;
+	}
+
+	cache.lastScannedBlock = hash;
+	cacheModified = true;
+
+	console.log("Block scan reset to " + hash);
+}
+
 //
 // Main program operation starts here
 //
@@ -675,6 +689,8 @@ else if (program.spend)
 	cmdSpend(program.spend);
 else if (program.txList)
 	cmdTxList();
+else if (program.rescanPtr)
+	cmdRescanPtr(program.rescanPtr);
 
 // Flush caches and wallet db, if not already done so inline
 walletWrite();
