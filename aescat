@@ -12,7 +12,16 @@ program
 
 var wallet = null;
 var walletFn = 'keys-wal.json.aes';
-var walletSecret = program.secret || 'DefaultPassword';
+
+function walletGetSecret()
+{
+	if (!('WAL_SECRET' in process.env)) {
+		console.error("WAL_SECRET must be set, to enable encryption");
+		process.exit(1);
+	}
+
+	return process.env.WAL_SECRET;
+}
 
 function walletRead()
 {
@@ -21,6 +30,7 @@ function walletRead()
 	var ciphertext = fs.readFileSync(walletFn, 'binary');
 
 	var plaintext = '';
+	var walletSecret = walletGetSecret();
 	var ciph = crypto.createDecipher('aes256', walletSecret);
 	plaintext += ciph.update(ciphertext, 'binary', 'utf8');
 	plaintext += ciph.final('utf8');
