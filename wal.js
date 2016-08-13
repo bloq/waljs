@@ -431,7 +431,7 @@ function cmdSyncHeaders()
 	});
 }
 
-function scanTx(tx)
+function scanTx(tx, blkhash)
 {
 	var matchTxout = {};
 	var matchTxin = {};
@@ -477,6 +477,9 @@ function scanTx(tx)
 		cache.myTx[tx.hash] = tx.toObject();
 		cache.myTx[tx.hash].raw = tx.toString();
 
+		if (blkhash)
+			cache.myTx[tx.hash].blockhash = blkhash;
+
 		for (var idx in matchTxin)
 			cache.myTx[tx.hash].inputs[idx].isMine = true;
 		for (var idx in matchTxout)
@@ -489,7 +492,9 @@ function scanTx(tx)
 function scanBlock(block)
 {
 	// Iterate through each transaction in the block
-	block.transactions.forEach(scanTx);
+	block.transactions.forEach(function (tx) {
+		scanTx(tx, block.hash);
+	});
 }
 
 function cmdScanBlocks()
@@ -649,7 +654,7 @@ function cmdSpend(spendFn)
 		.sign(privkeys);
 
 	// Add new tx to internal cache
-	scanTx(tx);
+	scanTx(tx, null);
 
 	// Sync db
 	walletWrite();
