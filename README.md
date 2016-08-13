@@ -1,5 +1,5 @@
 
-# Simple command line wallet
+# Simple BIP44 HD wallet for the command line.
 
 node.js command line bitcoin HD wallet, BIP 44 compatible.
 
