@@ -50,6 +50,11 @@ var bcacheModified = false;
 var rpcInfoFn = program.rpcinfo || 'rpc-info.json';
 var rpcInfoObj = null;
 
+function getUnixtime()
+{
+	return Math.floor(Date.now() / 1000);
+}
+
 function rpcInfoRead()
 {
 	rpcInfoObj = JSON.parse(fs.readFileSync(rpcInfoFn, 'utf8'));
@@ -111,11 +116,9 @@ function cacheNetPeer(addr)
 	if (addr in cache.peers)
 		return;
 
-	var now = new Date();
-
 	var peerObj = {
 		address: addr,
-		createTime: now.toISOString(),
+		createTime: getUnixtime(),
 	};
 
 	cache.peers[addr] = peerObj;
@@ -136,8 +139,10 @@ function walletRead()
 {
 	if (program.file) walletFn = program.file;
 
+	// Read encrypted binary
 	var ciphertext = fs.readFileSync(walletFn, 'binary');
 
+	// Decrypt to JSON object
 	var plaintext = '';
 	var walletSecret = walletGetSecret();
 	var ciph = crypto.createDecipher('aes256', walletSecret);
@@ -190,6 +195,8 @@ function walletCreate()
 	};
 
 	cmdAccountNew("master");
+
+	wallet.createTime = wallet.accounts["master"].createTime;
 
 	modified = true;
 }
@@ -252,13 +259,11 @@ function cmdAccountNew(acctName)
 		return;
 	}
 
-	var now = new Date();
-
 	var obj = {
 		name: acctName,
 		index: wallet.nextIndex,
 		nextKey: 0,
-		createTime: now.toISOString(),
+		createTime: getUnixtime(),
 	};
 
 	wallet.accounts[acctName] = obj;
@@ -317,11 +322,9 @@ function cmdAccountAddress(newAddr)
 
 	// If creating a new address, store new cache entry
 	if (newAddr) {
-		var now = new Date();
-
 		var matchObj = {
 			address: addressStr,
-			createTime: now.toISOString(),
+			createTime: getUnixtime(),
 			account: acctObj.name,
 			acctIndex: acctObj.index,
 			keyIndex: keyIndex,
@@ -520,7 +523,7 @@ function cmdScanBlocks()
 
 	var n_scanned = 0;
 	var n_tx_scanned = 0;
-	var curtime = Date.now();
+	var startTime = getUnixtime();
 
 	// Download and scan each block, from ptr to chain tip
 	async.until(function tester() {
@@ -542,18 +545,18 @@ function cmdScanBlocks()
 			// Scan transactions in block
 			scanBlock(block);
 
-			// Advanced pointer
+			// Advance pointer
 			cache.lastScannedBlock = scanHash;
 			cacheModified = true;
 
 			// Show progress indicator
-			if ((Date.now() - curtime) > (7*1000)) {
+			if ((getUnixtime() - startTime) > 7) {
 				console.log("Progress: height " +
 				    blockHdr.height.toString() + ", " +
 				    n_scanned.toString() + " blocks, " +
 				    n_tx_scanned.toString() + " TXs scanned.");
 
-				curtime = Date.now();
+				startTime = getUnixtime();
 			}
 
 			// Update stats
@@ -632,12 +635,11 @@ function cmdSpend(spendFn)
 					  network);
 
 	var addressStr = changeAddr.toString();
-	var now = new Date();
 
 	// Build new match object for new change address
 	var matchObj = {
 		address: addressStr,
-		createTime: now.toISOString(),
+		createTime: getUnixtime(),
 		account: acctObj.name,
 		acctIndex: acctObj.index,
 		keyIndex: keyIndex,
