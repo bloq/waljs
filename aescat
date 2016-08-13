@@ -40,6 +40,5 @@ function walletRead()
 
 walletRead();
 
-console.log(wallet);
-
+console.log(JSON.stringify(wallet, null, 2));
 
