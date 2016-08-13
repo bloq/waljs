@@ -1,0 +1,35 @@
+#!/usr/bin/env nodejs
+
+const fs = require('fs');
+const crypto = require('crypto');
+const program = require('commander');
+
+program
+	.version('0.0.1')
+	.option('-f, --file <path>', 'Encrypted JSON file')
+	.option('--secret <passphrase>', 'Encryption passphrase')
+	.parse(process.argv);
+
+var wallet = null;
+var walletFn = 'keys-wal.json.aes';
+var walletSecret = program.secret || 'DefaultPassword';
+
+function walletRead()
+{
+	if (program.file) walletFn = program.file;
+
+	var ciphertext = fs.readFileSync(walletFn, 'binary');
+
+	var plaintext = '';
+	var ciph = crypto.createDecipher('aes256', walletSecret);
+	plaintext += ciph.update(ciphertext, 'binary', 'utf8');
+	plaintext += ciph.final('utf8');
+
+	wallet = JSON.parse(plaintext);
+}
+
+walletRead();
+
+console.log(wallet);
+
+

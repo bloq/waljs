@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const fs = require('fs');
+const crypto = require('crypto');
 const dns = require('dns');
 const program = require('commander');
 const async = require('async');
@@ -14,6 +15,7 @@ program
 	.option('--rpcinfo <path>', 'bitcoind RPC credentials & configuration')
 	.option('--cache <path>', 'Wallet cache file')
 	.option('--cacheChain <path>', 'Blockchain cache file')
+	.option('--secret <passphrase>', 'Wallet encryption passphrase')
 	.option('--create', 'Create new wallet')
 	.option('--check', 'Validate wallet integrity')
 	.option('--accountNew <name>', 'Create new account')
@@ -32,8 +34,9 @@ program
 var network = bitcore.Networks.livenet;
 
 var wallet = null;
-var walletFn = 'keys-wal.json';
+var walletFn = 'keys-wal.json.aes';
 var modified = false;
+var walletSecret = program.secret || 'DefaultPassword';
 
 var cache = null;
 var cacheFn = 'cache-wal.json';
@@ -121,7 +124,15 @@ function cacheNetPeer(addr)
 function walletRead()
 {
 	if (program.file) walletFn = program.file;
-	wallet = JSON.parse(fs.readFileSync(walletFn, 'utf8'));
+
+	var ciphertext = fs.readFileSync(walletFn, 'binary');
+
+	var plaintext = '';
+	var ciph = crypto.createDecipher('aes256', walletSecret);
+	plaintext += ciph.update(ciphertext, 'binary', 'utf8');
+	plaintext += ciph.final('utf8');
+
+	wallet = JSON.parse(plaintext);
 }
 
 function walletWrite()
@@ -132,13 +143,26 @@ function walletWrite()
 	if (fs.existsSync(walletFn))
 		fs.renameSync(walletFn, walletFn + ".bak");
 
-	fs.writeFileSync(walletFn, JSON.stringify(wallet, null, 2) + "\n");
+	var plaintext = JSON.stringify(wallet, null, 2) + "\n";
+
+	var bufs = [];
+	var ciph = crypto.createCipher('aes256', walletSecret);
+	bufs.push(ciph.update(plaintext, 'utf8'));
+	bufs.push(ciph.final());
+	var ciphertext = Buffer.concat(bufs);
+
+	fs.writeFileSync(walletFn, ciphertext, 'binary');
 
 	modified = false;
 }
 
 function walletCreate()
 {
+	if (walletSecret == 'DefaultPassword') {
+		console.error("Stubbornly refusing to create a wallet encrypted with password " + walletSecret);
+		process.exit(1);
+	}
+
 	var hdPrivateKey = new bitcore.HDPrivateKey();
 	wallet = {
 		version: 1000000,
