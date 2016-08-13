@@ -5,6 +5,14 @@ node.js command line bitcoin HD wallet, BIP 44 compatible.
 
 ## Requirements
 
+### NPM modules
+
+Install several npm modules for node.js:
+
+	$ npm install async commander bitcore-lib bitcore-mnemonic bitcoind-rpc
+
+### Full node
+
 A full node, BloqEnterprise router or bitcoind, is required as a source
 of blocks and block headers.  RPC credentials are stored in
 rpc-info.json.
