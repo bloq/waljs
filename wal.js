@@ -7,6 +7,7 @@ const dns = require('dns');
 const program = require('commander');
 const async = require('async');
 const bitcore = require('bitcore-lib');
+const Mnemonic = require('bitcore-mnemonic');
 const RpcClient = require('bitcoind-rpc');
 
 program
@@ -168,7 +169,13 @@ function walletWrite()
 
 function walletCreate()
 {
-	var hdPrivateKey = new bitcore.HDPrivateKey();
+	// Generate mnemonic code
+	var code = new Mnemonic();
+
+	console.log("PRINT OUT the following wallet recovery words. You will only be shown this once:");
+	console.log(code.toString());
+
+	var hdPrivateKey = code.toHDPrivateKey();
 	wallet = {
 		version: 1000000,
 		privkeys: [
@@ -542,7 +549,9 @@ function cmdScanBlocks()
 
 			// Show progress indicator
 			if ((Date.now() - curtime) > (7*1000)) {
-				console.log("Progress: " + n_scanned.toString() + " blocks, " +
+				console.log("Progress: height " +
+				    blockHdr.height.toString() + ", " +
+				    n_scanned.toString() + " blocks, " +
 				    n_tx_scanned.toString() + " TXs scanned.");
 
 				curtime = Date.now();
