@@ -4,11 +4,13 @@ const assert = require('assert');
 const fs = require('fs');
 const crypto = require('crypto');
 const dns = require('dns');
+
 const program = require('commander');
 const async = require('async');
 const bitcore = require('bitcore-lib');
 const Mnemonic = require('bitcore-mnemonic');
 const RpcClient = require('bitcoind-rpc');
+const BitRest = require('./bitcoind-rest');
 
 program
 	.version('0.0.1')
@@ -179,7 +181,7 @@ function walletCreate()
 	wallet = {
 		version: 1000000,
 		privkeys: [
-			{ typ: "xpriv", 
+			{ typ: "xpriv",
 			  data: hdPrivateKey.toString(), }
 		],
 		accounts: {},
@@ -366,7 +368,7 @@ function cmdNetSeed()
 	});
 }
 
-function downloadHeaders(rpc)
+function downloadHeaders(rpcInfoObj)
 {
 	var n_headers = 0;
 
@@ -376,20 +378,23 @@ function downloadHeaders(rpc)
 		return (bcache.wantHeader && (bcache.wantHeader in bcache.blocks));
 	}, function iteree(callback) {
 		var scanHash = bcache.wantHeader;
-		rpc.getBlockHeader(scanHash, function(err, res) {
+
+		BitRest.headers(rpcInfoObj, scanHash, 1, function (err, arr) {
 			if (err) {
 				console.error("Block header failed, " + err);
 				callback(err);
 				return;
 			}
 
+			var hdr = arr[0];
+
 			// Build block header cache entry
 			var obj = {
-				height: res.result.height,
-				time: res.result.time,
-				merkleroot: res.result.merkleroot,
-				previousblockhash: res.result.previousblockhash || null,
-				nextblockhash: res.result.nextblockhash || null,
+				height: hdr.height,
+				time: hdr.time,
+				merkleroot: hdr.merkleroot,
+				previousblockhash: hdr.previousblockhash || null,
+				nextblockhash: hdr.nextblockhash || null,
 			};
 
 			// Store in cache; attach to doubly-linked list
@@ -417,23 +422,23 @@ function cmdSyncHeaders()
 	rpcInfoRead();
 
 	// Ask server for chain tip (most recent block)
-	const rpc = new RpcClient(rpcInfoObj);
-	rpc.getBestBlockHash(function(err, res) {
+	BitRest.chaininfo(rpcInfoObj, function (err, obj) {
 		if (err) {
 			console.error("Cannot get best block hash: " + err);
 			return;
 		}
 
-		var newBestBlock = res.result;
+		var newBestBlock = obj.bestblockhash;
 
 		// If best-block is different (new blocks or reorg),
 		// initiate header download
 		if (newBestBlock != bcache.bestBlock) {
-			bcache.bestBlock = res.result;
+			bcache.bestBlock = newBestBlock;
 			bcacheModified = true;
 
 			bcache.wantHeader = bcache.bestBlock;
-			downloadHeaders(rpc);
+
+			downloadHeaders(rpcInfoObj);
 		}
 	});
 }
@@ -513,7 +518,6 @@ function cmdScanBlocks()
 	// Init bitcoind RPC
 	rpcInfoRead();
 
-	const rpc = new RpcClient(rpcInfoObj);
 	var n_scanned = 0;
 	var n_tx_scanned = 0;
 	var curtime = Date.now();
@@ -530,15 +534,10 @@ function cmdScanBlocks()
 
 		const blockHdr = bcache.blocks[scanHash];
 
-		// Download block
-		rpc.getBlock(scanHash, false, function(err, res) {
-			if (err) {
-				console.error("Cannot get block: " + err);
-				return;
-			}
+		BitRest.block(rpcInfoObj, scanHash, function (err, buf) {
 
-			// Decode raw block
-			var block = new bitcore.Block(new Buffer(res.result, 'hex'));
+			// Decode raw binary block
+			var block = new bitcore.Block(buf);
 
 			// Scan transactions in block
 			scanBlock(block);
