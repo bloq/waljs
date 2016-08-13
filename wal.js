@@ -518,6 +518,18 @@ function cmdScanBlocks()
 	if (!cache.lastScannedBlock)
 		cache.lastScannedBlock = bcache.firstScanBlock;
 
+	// Skip blocks minted before wallet creation
+	var n_skipped = 0;
+	var scanTime = wallet.createTime - (60 * 60 * 2);
+	for (; cache.lastScannedBlock != bcache.bestBlock;
+	     cache.lastScannedBlock = bcache.blocks[cache.lastScannedBlock].nextblockhash) {
+		var blockHdr = bcache.blocks[cache.lastScannedBlock];
+		if (blockHdr.time >= scanTime)
+			break;
+
+		n_skipped++;
+	}
+
 	// Init bitcoind RPC
 	rpcInfoRead();
 
@@ -569,6 +581,7 @@ function cmdScanBlocks()
 		cacheWrite();
 		console.log(n_scanned.toString() + " blocks, " +
 			    n_tx_scanned.toString() + " TXs scanned.");
+		console.log(n_skipped.toString() + " skipped blocks");
 	});
 }
 
