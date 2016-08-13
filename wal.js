@@ -404,8 +404,8 @@ function cmdSyncHeaders()
 
 function scanTx(tx)
 {
-	var matchTxout = [];
-	var matchTxin = [];
+	var matchTxout = {};
+	var matchTxin = {};
 
 	// Scan outputs for addresses we know
 	for (var i = 0; i < tx.outputs.length; i++) {
@@ -415,7 +415,7 @@ function scanTx(tx)
 
 			var id = tx.hash + "," + i.toString();
 
-			matchTxout.push(id);
+			matchTxout[i] = true;
 
 			var unspentObj = {
 				txid: tx.hash,
@@ -436,15 +436,23 @@ function scanTx(tx)
 
 		if (id in cache.unspent) {
 			delete cache.unspent[id];
-			matchTxin.push(id);
+			matchTxin[i] = true;
 		}
 	}
 
 	// Cache entire TX, if ours
-	if ((matchTxout.length > 0) || (matchTxin > 0)) {
+	if ((Object.keys(matchTxout).length > 0) ||
+	    (Object.keys(matchTxin).length > 0)) {
 		console.log("New wallet TX " + tx.hash);
+
 		cache.myTx[tx.hash] = tx.toObject();
 		cache.myTx[tx.hash].raw = tx.toString();
+
+		for (var idx in matchTxin)
+			cache.myTx[tx.hash].inputs[idx].isMine = true;
+		for (var idx in matchTxout)
+			cache.myTx[tx.hash].outputs[idx].isMine = true;
+
 		cacheModified = true;
 	}
 }
