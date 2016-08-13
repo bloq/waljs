@@ -25,6 +25,11 @@ rpc-info.json.
 		"port": "8332"
 	}
 
+The HTTP REST interface to BER / bitcoind is disabled by default, and
+must be enabled in bitcoin.conf:
+
+	rest=1
+
 ## Help
 
 For commands and options, run
