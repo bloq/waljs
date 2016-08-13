@@ -15,7 +15,6 @@ program
 	.option('--rpcinfo <path>', 'bitcoind RPC credentials (def. rpc-info.json)')
 	.option('--cache <path>', 'Wallet cache file (def: cache-wal.json)')
 	.option('--cacheChain <path>', 'Blockchain cache file (def: cache-blocks.json)')
-	.option('--secret <passphrase>', 'Wallet encryption passphrase')
 	.option('--create', 'CMD: Create new wallet')
 	.option('--check', 'CMD: Validate wallet integrity')
 	.option('--accountNew <name>', 'CMD: Create new account')
@@ -36,7 +35,6 @@ var network = bitcore.Networks.livenet;
 var wallet = null;
 var walletFn = 'keys-wal.json.aes';
 var modified = false;
-var walletSecret = program.secret || 'DefaultPassword';
 
 var cache = null;
 var cacheFn = 'cache-wal.json';
@@ -121,6 +119,16 @@ function cacheNetPeer(addr)
 	cacheModified = true;
 }
 
+function walletGetSecret()
+{
+	if (!('WAL_SECRET' in process.env)) {
+		console.error("WAL_SECRET must be set, to enable encryption");
+		process.exit(1);
+	}
+
+	return process.env.WAL_SECRET;
+}
+
 function walletRead()
 {
 	if (program.file) walletFn = program.file;
@@ -128,6 +136,7 @@ function walletRead()
 	var ciphertext = fs.readFileSync(walletFn, 'binary');
 
 	var plaintext = '';
+	var walletSecret = walletGetSecret();
 	var ciph = crypto.createDecipher('aes256', walletSecret);
 	plaintext += ciph.update(ciphertext, 'binary', 'utf8');
 	plaintext += ciph.final('utf8');
@@ -146,6 +155,7 @@ function walletWrite()
 	var plaintext = JSON.stringify(wallet, null, 2) + "\n";
 
 	var bufs = [];
+	var walletSecret = walletGetSecret();
 	var ciph = crypto.createCipher('aes256', walletSecret);
 	bufs.push(ciph.update(plaintext, 'utf8'));
 	bufs.push(ciph.final());
@@ -158,11 +168,6 @@ function walletWrite()
 
 function walletCreate()
 {
-	if (walletSecret == 'DefaultPassword') {
-		console.error("Stubbornly refusing to create a wallet encrypted with password " + walletSecret);
-		process.exit(1);
-	}
-
 	var hdPrivateKey = new bitcore.HDPrivateKey();
 	wallet = {
 		version: 1000000,
