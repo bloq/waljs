@@ -9,13 +9,14 @@ node.js command line bitcoin HD wallet, BIP 44 compatible.
 
 Install several npm modules for node.js:
 
-	$ npm install async commander bitcore-lib bitcore-mnemonic bitcoind-rpc
+	$ npm install async commander bitcore-lib bitcore-mnemonic bitcoind-rpc bitcore-p2p
 
 ### Full node
 
-A full node, BloqEnterprise router or bitcoind, is required as a source
-of blocks and block headers.  RPC credentials are stored in
-rpc-info.json.
+A full node, BloqEnterprise router or bitcoind, is required to
+transmit transactions to the network.
+
+RPC credentials are stored in rpc-info.json:
 
 	{
 		"protocol": "http",
@@ -25,10 +26,7 @@ rpc-info.json.
 		"port": "8332"
 	}
 
-The HTTP REST interface to BER / bitcoind is disabled by default, and
-must be enabled in bitcoin.conf:
-
-	rest=1
+The wallet will contact 127.0.0.1 port 8333 for P2P header & block requests.
 
 ## Help
 
