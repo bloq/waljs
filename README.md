@@ -38,6 +38,7 @@ For commands and options, run
 
 ### Create new wallet
 
+	$ export WAL_SECRET="this is my secret encryption passphrase"
 	$ ./wal.js --create
 
 ### Check wallet integrity
