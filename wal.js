@@ -39,9 +39,9 @@ var wallet = null;
 var walletFn = 'keys-wal.json.aes';
 var modified = false;
 
-var cache = null;
-var cacheFn = 'cache-wal.json';
-var cacheModified = false;
+var wcache = null;
+var wcacheFn = 'cache-wal.json';
+var wcacheModified = false;
 
 var bcache = null;
 var bcacheFn = 'cache-blocks.json';
@@ -63,11 +63,11 @@ function rpcInfoRead()
 function cacheRead()
 {
 	// Read wallet cache
-	if (program.cache) cacheFn = program.cache;
-	if (fs.existsSync(cacheFn))
-		cache = JSON.parse(fs.readFileSync(cacheFn, 'utf8'));
+	if (program.cache) wcacheFn = program.cache;
+	if (fs.existsSync(wcacheFn))
+		wcache = JSON.parse(fs.readFileSync(wcacheFn, 'utf8'));
 	else {
-		cache = {
+		wcache = {
 			peers: {},
 
 			lastScannedBlock: null,
@@ -75,7 +75,7 @@ function cacheRead()
 			unspent: {},
 			myTx: {},
 		};
-		cacheModified = true;
+		wcacheModified = true;
 	}
 
 	// Read blockchain cache
@@ -102,18 +102,18 @@ function cacheRead()
 
 function cacheWrite()
 {
-	if (cacheModified)
-		fs.writeFileSync(cacheFn, JSON.stringify(cache, null, 2) + "\n");
+	if (wcacheModified)
+		fs.writeFileSync(wcacheFn, JSON.stringify(wcache, null, 2) + "\n");
 	if (bcacheModified)
 		fs.writeFileSync(bcacheFn, JSON.stringify(bcache, null, 2) + "\n");
 
-	cacheModified = false;
+	wcacheModified = false;
 	bcacheModified = false;
 }
 
 function cacheNetPeer(addr)
 {
-	if (addr in cache.peers)
+	if (addr in wcache.peers)
 		return;
 
 	var peerObj = {
@@ -121,8 +121,8 @@ function cacheNetPeer(addr)
 		createTime: getUnixtime(),
 	};
 
-	cache.peers[addr] = peerObj;
-	cacheModified = true;
+	wcache.peers[addr] = peerObj;
+	wcacheModified = true;
 }
 
 function walletGetSecret()
@@ -241,9 +241,9 @@ function cmdAccountList()
 	});
 
 	// For each UTXO, assign to an account
-	for (var utxoId in cache.unspent) {
-		var utxo = cache.unspent[utxoId];
-		var addrInfo = cache.matchAddresses[utxo.address];
+	for (var utxoId in wcache.unspent) {
+		var utxo = wcache.unspent[utxoId];
+		var addrInfo = wcache.matchAddresses[utxo.address];
 		accts[addrInfo.account].satoshis += utxo.satoshis;
 		accts[addrInfo.account].btc =
 			bitcore.Unit.fromSatoshis(accts[addrInfo.account].satoshis).toBTC();
@@ -334,8 +334,8 @@ function cmdAccountAddress(newAddr)
 		acctObj.nextKey++;
 		modified = true;
 
-		cache.matchAddresses[addressStr] = matchObj;
-		cacheModified = true;
+		wcache.matchAddresses[addressStr] = matchObj;
+		wcacheModified = true;
 	}
 }
 
@@ -343,7 +343,7 @@ function cmdNetSeed()
 {
 	var seeds = network.dnsSeeds;
 
-	var lenStart = Object.keys(cache.peers).length;
+	var lenStart = Object.keys(wcache.peers).length;
 
 	// Async resolve for each DNS seed
 	async.each(seeds, function iteree(hostname, cb) {
@@ -364,7 +364,7 @@ function cmdNetSeed()
 		// Store updated cache
 		cacheWrite();
 
-		var lenEnd = Object.keys(cache.peers).length;
+		var lenEnd = Object.keys(wcache.peers).length;
 		var lenDiff = lenEnd - lenStart;
 
 		console.log("Peers seeded from DNS.  New peers discovered: " + lenDiff.toString());
@@ -455,7 +455,7 @@ function scanTx(tx, blkhash)
 	for (var i = 0; i < tx.outputs.length; i++) {
 		var txout = tx.outputs[i];
 		var addr = txout.script.toAddress();
-		if (addr && (addr.toString() in cache.matchAddresses)) {
+		if (addr && (addr.toString() in wcache.matchAddresses)) {
 
 			var id = tx.hash + "," + i.toString();
 
@@ -468,7 +468,7 @@ function scanTx(tx, blkhash)
 				script: txout.script.toHex(),
 				satoshis: txout.satoshis,
 			};
-			cache.unspent[id] = unspentObj;
+			wcache.unspent[id] = unspentObj;
 		}
 	}
 
@@ -478,8 +478,8 @@ function scanTx(tx, blkhash)
 
 		var id = txin.prevTxId.toString('hex') + "," + txin.outputIndex.toString();
 
-		if (id in cache.unspent) {
-			delete cache.unspent[id];
+		if (id in wcache.unspent) {
+			delete wcache.unspent[id];
 			matchTxin[i] = true;
 		}
 	}
@@ -489,18 +489,18 @@ function scanTx(tx, blkhash)
 	    (Object.keys(matchTxin).length > 0)) {
 		console.log("New wallet TX " + tx.hash);
 
-		cache.myTx[tx.hash] = tx.toObject();
-		cache.myTx[tx.hash].raw = tx.toString();
+		wcache.myTx[tx.hash] = tx.toObject();
+		wcache.myTx[tx.hash].raw = tx.toString();
 
 		if (blkhash)
-			cache.myTx[tx.hash].blockhash = blkhash;
+			wcache.myTx[tx.hash].blockhash = blkhash;
 
 		for (var idx in matchTxin)
-			cache.myTx[tx.hash].inputs[idx].isMine = true;
+			wcache.myTx[tx.hash].inputs[idx].isMine = true;
 		for (var idx in matchTxout)
-			cache.myTx[tx.hash].outputs[idx].isMine = true;
+			wcache.myTx[tx.hash].outputs[idx].isMine = true;
 
-		cacheModified = true;
+		wcacheModified = true;
 	}
 }
 
@@ -515,15 +515,15 @@ function scanBlock(block)
 function cmdScanBlocks()
 {
 	// If scan ptr not set, set to earliest known block
-	if (!cache.lastScannedBlock)
-		cache.lastScannedBlock = bcache.firstScanBlock;
+	if (!wcache.lastScannedBlock)
+		wcache.lastScannedBlock = bcache.firstScanBlock;
 
 	// Skip blocks minted before wallet creation
 	var n_skipped = 0;
 	var scanTime = wallet.createTime - (60 * 60 * 2);
-	for (; cache.lastScannedBlock != bcache.bestBlock;
-	     cache.lastScannedBlock = bcache.blocks[cache.lastScannedBlock].nextblockhash) {
-		var blockHdr = bcache.blocks[cache.lastScannedBlock];
+	for (; wcache.lastScannedBlock != bcache.bestBlock;
+	     wcache.lastScannedBlock = bcache.blocks[wcache.lastScannedBlock].nextblockhash) {
+		var blockHdr = bcache.blocks[wcache.lastScannedBlock];
 		if (blockHdr.time >= scanTime)
 			break;
 
@@ -539,9 +539,9 @@ function cmdScanBlocks()
 
 	// Download and scan each block, from ptr to chain tip
 	async.until(function tester() {
-		return (cache.lastScannedBlock == bcache.bestBlock);
+		return (wcache.lastScannedBlock == bcache.bestBlock);
 	}, function iteree(callback) {
-		const scanHash = bcache.blocks[cache.lastScannedBlock].nextblockhash;
+		const scanHash = bcache.blocks[wcache.lastScannedBlock].nextblockhash;
 		if (!scanHash) {
 			callback();
 			return;
@@ -558,8 +558,8 @@ function cmdScanBlocks()
 			scanBlock(block);
 
 			// Advance pointer
-			cache.lastScannedBlock = scanHash;
-			cacheModified = true;
+			wcache.lastScannedBlock = scanHash;
+			wcacheModified = true;
 
 			// Show progress indicator
 			if ((getUnixtime() - startTime) > 7) {
@@ -587,7 +587,7 @@ function cmdScanBlocks()
 
 function privkeyFromAddress(addr)
 {
-	var matchObj = cache.matchAddresses[addr];
+	var matchObj = wcache.matchAddresses[addr];
 
 	// Verify this is BIP 44 etc. compatible
 	var hdpath_hard = "m/44'/0'/" +
@@ -616,9 +616,9 @@ function cmdSpend(spendFn)
 	// List UTXOs for this account
 	var acctUtxos = [];
 	var privkeys = [];
-	for (var utxoId in cache.unspent) {
-		var utxo = cache.unspent[utxoId];
-		var addrInfo = cache.matchAddresses[utxo.address];
+	for (var utxoId in wcache.unspent) {
+		var utxo = wcache.unspent[utxoId];
+		var addrInfo = wcache.matchAddresses[utxo.address];
 		if (addrInfo.account == account) {
 			var utxoObj = new bitcore.Transaction.UnspentOutput(utxo);
 			acctUtxos.push(utxoObj);
@@ -663,8 +663,8 @@ function cmdSpend(spendFn)
 	acctObj.nextKey++;
 	modified = true;
 
-	cache.matchAddresses[addressStr] = matchObj;
-	cacheModified = true;
+	wcache.matchAddresses[addressStr] = matchObj;
+	wcacheModified = true;
 
 	if ('btc' in spendInfo.to)
 		spendInfo.to.satoshis = bitcore.Unit.fromBTC(spendInfo.to.btc).toSatoshis();
@@ -705,7 +705,7 @@ function cmdTxList()
 {
 	var txlist = [];
 
-	for (var txid in cache.myTx) {
+	for (var txid in wcache.myTx) {
 		var obj = {
 			txid: txid,
 		};
@@ -723,8 +723,8 @@ function cmdRescanPtr(hash)
 		return;
 	}
 
-	cache.lastScannedBlock = hash;
-	cacheModified = true;
+	wcache.lastScannedBlock = hash;
+	wcacheModified = true;
 
 	console.log("Block scan reset to " + hash);
 }
