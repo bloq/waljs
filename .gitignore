@@ -2,5 +2,6 @@
 rpc-info.json
 cache-blocks.json
 cache-wal.json
+cache-net.json
 keys-wal.json*
 

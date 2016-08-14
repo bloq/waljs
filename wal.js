@@ -18,6 +18,7 @@ program
 	.option('--rpcinfo <path>', 'bitcoind RPC credentials (def. rpc-info.json)')
 	.option('--cache <path>', 'Wallet cache file (def: cache-wal.json)')
 	.option('--cacheChain <path>', 'Blockchain cache file (def: cache-blocks.json)')
+	.option('--cacheNet <path>', 'P2P network cache file (def: cache-net.json)')
 	.option('--create', 'CMD: Create new wallet')
 	.option('--check', 'CMD: Validate wallet integrity')
 	.option('--accountNew <name>', 'CMD: Create new account')
@@ -47,6 +48,10 @@ var bcache = null;
 var bcacheFn = 'cache-blocks.json';
 var bcacheModified = false;
 
+var netCache = null;
+var netCacheFn = program.cacheNet || 'cache-net.json';
+var netCacheModified = false;
+
 var rpcInfoFn = program.rpcinfo || 'rpc-info.json';
 var rpcInfoObj = null;
 
@@ -68,8 +73,6 @@ function cacheRead()
 		wcache = JSON.parse(fs.readFileSync(wcacheFn, 'utf8'));
 	else {
 		wcache = {
-			peers: {},
-
 			lastScannedBlock: null,
 			matchAddresses: {},
 			unspent: {},
@@ -98,6 +101,16 @@ function cacheRead()
 		};
 		bcacheModified = true;
 	}
+
+	// Read network cache
+	if (fs.existsSync(netCacheFn))
+		netCache = JSON.parse(fs.readFileSync(netCacheFn, 'utf8'));
+	else {
+		netCache = {
+			peers: {},
+		};
+		netCacheModified = true;
+	}
 }
 
 function cacheWrite()
@@ -106,14 +119,17 @@ function cacheWrite()
 		fs.writeFileSync(wcacheFn, JSON.stringify(wcache, null, 2) + "\n");
 	if (bcacheModified)
 		fs.writeFileSync(bcacheFn, JSON.stringify(bcache, null, 2) + "\n");
+	if (netCacheModified)
+		fs.writeFileSync(netCacheFn, JSON.stringify(netCache, null, 2) + "\n");
 
 	wcacheModified = false;
 	bcacheModified = false;
+	netCacheModified = false;
 }
 
 function cacheNetPeer(addr)
 {
-	if (addr in wcache.peers)
+	if (addr in netCache.peers)
 		return;
 
 	var peerObj = {
@@ -121,8 +137,8 @@ function cacheNetPeer(addr)
 		createTime: getUnixtime(),
 	};
 
-	wcache.peers[addr] = peerObj;
-	wcacheModified = true;
+	netCache.peers[addr] = peerObj;
+	netCacheModified = true;
 }
 
 function walletGetSecret()
@@ -343,7 +359,7 @@ function cmdNetSeed()
 {
 	var seeds = network.dnsSeeds;
 
-	var lenStart = Object.keys(wcache.peers).length;
+	var lenStart = Object.keys(netCache.peers).length;
 
 	// Async resolve for each DNS seed
 	async.each(seeds, function iteree(hostname, cb) {
@@ -364,7 +380,7 @@ function cmdNetSeed()
 		// Store updated cache
 		cacheWrite();
 
-		var lenEnd = Object.keys(wcache.peers).length;
+		var lenEnd = Object.keys(netCache.peers).length;
 		var lenDiff = lenEnd - lenStart;
 
 		console.log("Peers seeded from DNS.  New peers discovered: " + lenDiff.toString());
