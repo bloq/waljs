@@ -90,12 +90,11 @@ function cacheRead()
 				"height": 423000,
 				"time": 1469961500,
 				"merkleroot": "9ea055f22d0906eb8492985b7b5350de95b4942278d00d234108e39ad8c509b3",
-				"previousblockhash":"000000000000000003797cd09efa8c88e0d5c4c26712250c9f977aa6a2371d33",
+				"prevHash":null,
 			 }
 			},
 			firstScanBlock: "000000000000000001910d9f594aea0950d580d08c07ec324d0573bd3272ae86",
-			bestBlock: null,
-			wantHeader: null,
+			bestBlock: "000000000000000001910d9f594aea0950d580d08c07ec324d0573bd3272ae86",
 		};
 		bcacheModified = true;
 	}
@@ -420,24 +419,43 @@ function cmdSyncHeaders()
 		port:	8333,
 	};
 
-	// Imperfect; should take larger steps backwards
-	var locators = [];
-	var hashPtr = bcache.bestBlock;
-	for (var i = 0; i < 10; i++) {
-		locators.push(hashPtr);
-		hashPtr = bcache.blocks[hashPtr].previousblockhash;
-		if (hashPtr == null)
-			break;
-	}
+	var wantHeaders = true;
+	var n_headers = 0;
 
 	// Ask peer for headers, starting with our last known best-block
-	p2preq.headers(p2pInfo, locators, function(err, headers) {
-		headers.forEach(function(hdr) {
-			processHeader(hdr);
-		});
+	async.until(function tester() {
+		return (wantHeaders == false);
+	}, function iteree(callback) {
+		// Imperfect; should take larger steps backwards
+		var locators = [];
+		var hashPtr = bcache.bestBlock;
+		for (var i = 0; i < 10; i++) {
+			locators.push(hashPtr);
+			hashPtr = bcache.blocks[hashPtr].prevHash;
+			if (hashPtr == null)
+				break;
+		}
 
+		p2preq.headers(p2pInfo, locators, function(err, headers) {
+			if (err) {
+				console.error("P2P Headers failed: " + err);
+				callback(err);
+				return;
+			}
+
+			headers.forEach(function(hdr) {
+				processHeader(hdr);
+				n_headers++;
+			});
+
+			if (headers.length == 0)
+				wantHeaders = false;
+
+			callback();
+		});
+	}, function done() {
 		cacheWrite();
-		console.log(headers.length.toString() + " headers downloaded.");
+		console.log(n_headers.toString() + " headers downloaded.");
 		console.log("Tip " + bcache.bestBlock);
 	});
 }
