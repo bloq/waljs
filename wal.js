@@ -11,6 +11,7 @@ const bitcore = require('bitcore-lib');
 const Mnemonic = require('bitcore-mnemonic');
 const RpcClient = require('bitcoind-rpc');
 const BitRest = require('./bitcoind-rest');
+const p2preq = require('./p2preq');
 
 program
 	.version('0.0.1')
@@ -383,78 +384,62 @@ function cmdNetSeed()
 	});
 }
 
-function downloadHeaders(rpcInfoObj)
+function processHeader(hdr)
 {
-	var n_headers = 0;
+	// Already seen?
+	if (hdr.hash in bcache.blocks) {
+		console.log("Dup " + hdr.hash);
+		return;
+	}
 
-	// Request headers, starting from most recent, moving earlier in
-	// time until we reach a header hash we've seen before.
-	async.until(function tester() {
-		return (bcache.wantHeader && (bcache.wantHeader in bcache.blocks));
-	}, function iteree(callback) {
-		var scanHash = bcache.wantHeader;
+	// Build block header cache entry
+	var obj = hdr.toObject();
 
-		BitRest.headers(rpcInfoObj, scanHash, 1, function (err, arr) {
-			if (err) {
-				console.error("Block header failed, " + err);
-				callback(err);
-				return;
-			}
+	// Do we have the previous block in the chain?
+	if (!(obj.prevHash in bcache.blocks)) {
+		console.log("Orphan " + hdr.hash);
+		return;
+	}
 
-			var hdr = arr[0];
+	obj.nextHash = null;
+	obj.height = bcache.blocks[obj.prevHash].height + 1;
 
-			// Build block header cache entry
-			var obj = {
-				height: hdr.height,
-				time: hdr.time,
-				merkleroot: hdr.merkleroot,
-				previousblockhash: hdr.previousblockhash || null,
-				nextblockhash: hdr.nextblockhash || null,
-			};
+	// Store in cache; attach to doubly-linked list
+	bcache.bestBlock = hdr.hash;
+	bcache.blocks[hdr.hash] = obj;
+	bcache.blocks[obj.prevHash].nextHash = hdr.hash;
 
-			// Store in cache; attach to doubly-linked list
-			bcache.blocks[scanHash] = obj;
-			if (obj.previousblockhash in bcache.blocks)
-				bcache.blocks[obj.previousblockhash].nextblockhash = scanHash;
-			bcacheModified = true;
+	bcacheModified = true;
 
-			// Advance to previous block
-			if (obj.previousblockhash && obj.height > 0)
-				bcache.wantHeader = obj.previousblockhash;
-
-			n_headers++;
-			callback();
-		});
-	}, function done() {
-		cacheWrite();
-		console.log(n_headers.toString() + " headers downloaded.");
-		console.log("Tip " + bcache.bestBlock);
-	});
+	return obj;
 }
 
 function cmdSyncHeaders()
 {
-	rpcInfoRead();
+	var p2pInfo = {
+		host:	'127.0.0.1',
+		port:	8333,
+	};
 
-	// Ask server for chain tip (most recent block)
-	BitRest.chaininfo(rpcInfoObj, function (err, obj) {
-		if (err) {
-			console.error("Cannot get best block hash: " + err);
-			return;
-		}
+	// Imperfect; should take larger steps backwards
+	var locators = [];
+	var hashPtr = bcache.bestBlock;
+	for (var i = 0; i < 10; i++) {
+		locators.push(hashPtr);
+		hashPtr = bcache.blocks[hashPtr].previousblockhash;
+		if (hashPtr == null)
+			break;
+	}
 
-		var newBestBlock = obj.bestblockhash;
+	// Ask peer for headers, starting with our last known best-block
+	p2preq.headers(p2pInfo, locators, function(err, headers) {
+		headers.forEach(function(hdr) {
+			processHeader(hdr);
+		});
 
-		// If best-block is different (new blocks or reorg),
-		// initiate header download
-		if (newBestBlock != bcache.bestBlock) {
-			bcache.bestBlock = newBestBlock;
-			bcacheModified = true;
-
-			bcache.wantHeader = bcache.bestBlock;
-
-			downloadHeaders(rpcInfoObj);
-		}
+		cacheWrite();
+		console.log(headers.length.toString() + " headers downloaded.");
+		console.log("Tip " + bcache.bestBlock);
 	});
 }
 
@@ -534,7 +519,7 @@ function cmdScanBlocks()
 	var n_skipped = 0;
 	var scanTime = wallet.createTime - (60 * 60 * 2);
 	for (; wcache.lastScannedBlock != bcache.bestBlock;
-	     wcache.lastScannedBlock = bcache.blocks[wcache.lastScannedBlock].nextblockhash) {
+	     wcache.lastScannedBlock = bcache.blocks[wcache.lastScannedBlock].nextHash) {
 		var blockHdr = bcache.blocks[wcache.lastScannedBlock];
 		if (blockHdr.time >= scanTime)
 			break;
@@ -553,7 +538,7 @@ function cmdScanBlocks()
 	async.until(function tester() {
 		return (wcache.lastScannedBlock == bcache.bestBlock);
 	}, function iteree(callback) {
-		const scanHash = bcache.blocks[wcache.lastScannedBlock].nextblockhash;
+		const scanHash = bcache.blocks[wcache.lastScannedBlock].nextHash;
 		if (!scanHash) {
 			callback();
 			return;
