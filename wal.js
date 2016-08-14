@@ -10,7 +10,6 @@ const async = require('async');
 const bitcore = require('bitcore-lib');
 const Mnemonic = require('bitcore-mnemonic');
 const RpcClient = require('bitcoind-rpc');
-const BitRest = require('./bitcoind-rest');
 const p2preq = require('./p2preq');
 
 program
@@ -511,6 +510,11 @@ function scanBlock(block)
 
 function cmdScanBlocks()
 {
+	var p2pInfo = {
+		host:	'127.0.0.1',
+		port:	8333,
+	};
+
 	// If scan ptr not set, set to earliest known block
 	if (!wcache.lastScannedBlock)
 		wcache.lastScannedBlock = bcache.firstScanBlock;
@@ -526,9 +530,6 @@ function cmdScanBlocks()
 
 		n_skipped++;
 	}
-
-	// Init bitcoind RPC
-	rpcInfoRead();
 
 	var n_scanned = 0;
 	var n_tx_scanned = 0;
@@ -546,10 +547,7 @@ function cmdScanBlocks()
 
 		const blockHdr = bcache.blocks[scanHash];
 
-		BitRest.block(rpcInfoObj, scanHash, function (err, buf) {
-
-			// Decode raw binary block
-			var block = new bitcore.Block(buf);
+		p2preq.getBlock(p2pInfo, scanHash, function (err, block) {
 
 			// Scan transactions in block
 			scanBlock(block);
