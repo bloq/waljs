@@ -37,15 +37,15 @@ program
 var network = bitcore.Networks.livenet;
 
 var wallet = null;
-var walletFn = 'keys-wal.json.aes';
+var walletFn = program.file || 'keys-wal.json.aes';
 var modified = false;
 
 var wcache = null;
-var wcacheFn = 'cache-wal.json';
+var wcacheFn = program.cache || 'cache-wal.json';
 var wcacheModified = false;
 
 var bcache = null;
-var bcacheFn = 'cache-blocks.json';
+var bcacheFn = program.cacheChain || 'cache-blocks.json';
 var bcacheModified = false;
 
 var netCache = null;
@@ -68,7 +68,6 @@ function rpcInfoRead()
 function cacheRead()
 {
 	// Read wallet cache
-	if (program.cache) wcacheFn = program.cache;
 	if (fs.existsSync(wcacheFn))
 		wcache = JSON.parse(fs.readFileSync(wcacheFn, 'utf8'));
 	else {
@@ -82,7 +81,6 @@ function cacheRead()
 	}
 
 	// Read blockchain cache
-	if (program.cacheChain) bcacheFn = program.cacheChain;
 	if (fs.existsSync(bcacheFn))
 		bcache = JSON.parse(fs.readFileSync(bcacheFn, 'utf8'));
 	else {
@@ -153,8 +151,6 @@ function walletGetSecret()
 
 function walletRead()
 {
-	if (program.file) walletFn = program.file;
-
 	// Read encrypted binary
 	var ciphertext = fs.readFileSync(walletFn, 'binary');
 
