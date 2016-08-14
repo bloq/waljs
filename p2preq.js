@@ -2,6 +2,7 @@
 var bitcore = require('bitcore-lib');
 var BufferUtil = bitcore.util.buffer;
 const p2p = require('bitcore-p2p');
+const P2P_TIMEOUT = 15 * 1000;
 
 function headers(p2pInfo, locators, callback)
 {
@@ -10,6 +11,7 @@ function headers(p2pInfo, locators, callback)
 		port:	p2pInfo.port,
 	};
 	var peer = new p2p.Peer(p2pcfg);
+	var timeoutId = null;
 
 	peer.on('ready', function() {
 		var opts = {
@@ -18,11 +20,17 @@ function headers(p2pInfo, locators, callback)
 		};
 		var msg = peer.messages.GetHeaders(opts);
 		peer.sendMessage(msg);
+
+		timeoutId = setTimeout(function () {
+			peer.disconnect();
+			callback(new Error("P2P timeout"));
+		}, P2P_TIMEOUT);
 	});
 
 	peer.on('headers', function(msg) {
-		callback(null, msg.headers);
 		peer.disconnect();
+		clearTimeout(timeoutId);
+		callback(null, msg.headers);
 	});
 
 	peer.connect();
@@ -36,6 +44,7 @@ function getBlock(p2pInfo, hash, callback)
 		port:	p2pInfo.port,
 	};
 	var peer = new p2p.Peer(p2pcfg);
+	var timeoutId = null;
 
 	peer.on('ready', function() {
 		var inventory = [
@@ -43,21 +52,29 @@ function getBlock(p2pInfo, hash, callback)
 		];
 		var msg = peer.messages.GetData(inventory);
 		peer.sendMessage(msg);
+
+		timeoutId = setTimeout(function () {
+			peer.disconnect();
+			callback(new Error("P2P timeout"));
+		}, P2P_TIMEOUT);
 	});
 
 	peer.on('block', function(msg) {
-		callback(null, msg.block);
 		peer.disconnect();
+		clearTimeout(timeoutId);
+		callback(null, msg.block);
 	});
 
 	peer.on('notfound', function(msg) {
-		callback(null, null);
 		peer.disconnect();
+		clearTimeout(timeoutId);
+		callback(null, null);
 	});
 
 	peer.on('reject', function(msg) {
-		callback(null, null);
 		peer.disconnect();
+		clearTimeout(timeoutId);
+		callback(null, null);
 	});
 
 	peer.connect();

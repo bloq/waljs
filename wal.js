@@ -548,6 +548,11 @@ function cmdScanBlocks()
 		const blockHdr = bcache.blocks[scanHash];
 
 		p2preq.getBlock(p2pInfo, scanHash, function (err, block) {
+			if (err) {
+				console.error("GetBlock " + scanHash + " failed: " + err);
+				callback(err);
+				return;
+			}
 
 			// Scan transactions in block
 			scanBlock(block);
