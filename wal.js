@@ -591,9 +591,13 @@ function cmdScanBlocks()
 	}, function done() {
 		// Flush updated cache
 		cacheWrite();
-		console.log(n_scanned.toString() + " blocks, " +
+		const blockHdr = bcache.blocks[wcache.lastScannedBlock];
+		console.log("Scanned chain to height " +
+			    blockHdr.height.toString() + ", " +
+			    n_scanned.toString() + " blocks, " +
 			    n_tx_scanned.toString() + " TXs scanned.");
-		console.log(n_skipped.toString() + " skipped blocks");
+		if (n_skipped)
+			console.log(n_skipped.toString() + " skipped blocks");
 	});
 }
 
