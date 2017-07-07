@@ -6,9 +6,6 @@
   "bin": {
     "waljs": "./wal.js"
   },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bloq/waljs.git"
@@ -18,8 +15,8 @@
     "blockchain",
     "bloq"
   ],
-  "author": "Jeff Garzik",
-  "license": "ISC",
+  "author": "Jeff Garzik <jeff@bloq.com>",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/bloq/waljs/issues"
   },

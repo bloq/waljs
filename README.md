@@ -3,10 +3,16 @@
 
 node.js command line bitcoin HD wallet, BIP 44 compatible.
 
-## Requirements
+## Requirements and install
 
-Until we have posted the module in the NPM registry, for installing it globally using the command `npm install -g waljs`,
-we must clone the repository and execute `npm install` and then `npm link`, then will be able to use it directly in the cmd.
+First clone the repository and install the dependencies using the next commands:
+
+```BASH
+$ npm install
+$ sudo npm link
+```
+
+Now you are ready for use it globally:
 
 ```BASH
 $ waljs
