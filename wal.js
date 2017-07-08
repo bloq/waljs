@@ -1,4 +1,4 @@
-#!/usr/bin/env nodejs
+#!/usr/bin/env node
 
 const assert = require('assert');
 const fs = require('fs');

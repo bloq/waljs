@@ -1,0 +1,32 @@
+{
+  "name": "waljs",
+  "version": "0.0.1",
+  "description": "node.js command line bitcoin HD wallet, BIP 44 compatible.",
+  "main": "wal.js",
+  "bin": {
+    "waljs": "./wal.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bloq/waljs.git"
+  },
+  "keywords": [
+    "wallet",
+    "blockchain",
+    "bloq"
+  ],
+  "author": "Jeff Garzik <jeff@bloq.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bloq/waljs/issues"
+  },
+  "homepage": "https://github.com/bloq/waljs#readme",
+  "dependencies": {
+    "async": "^2.5.0",
+    "bitcoind-rpc": "^0.7.0",
+    "bitcore-lib": "^0.14.0",
+    "bitcore-mnemonic": "^1.2.5",
+    "bitcore-p2p": "^1.1.2",
+    "commander": "^2.11.0"
+  }
+}

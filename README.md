@@ -3,13 +3,20 @@
 
 node.js command line bitcoin HD wallet, BIP 44 compatible.
 
-## Requirements
+## Requirements and install
 
-### NPM modules
+First clone the repository and install the dependencies using the next commands:
 
-Install several npm modules for node.js:
+```BASH
+$ npm install
+$ sudo npm link
+```
 
-	$ npm install async commander bitcore-lib bitcore-mnemonic bitcoind-rpc bitcore-p2p
+Now you are ready for use it globally:
+
+```BASH
+$ waljs
+```
 
 ### Full node
 
@@ -32,45 +39,45 @@ The wallet will contact 127.0.0.1 port 8333 for P2P header & block requests.
 
 For commands and options, run
 
-	$ ./wal.js --help
+	$ waljs --help
 
 ## Wallet operations
 
 ### Create new wallet
 
 	$ export WAL_SECRET="this is my secret encryption passphrase"
-	$ ./wal.js --create
+	$ waljs --create
 
 ### Check wallet integrity
 
-	$ ./wal.js --check
+	$ waljs --check
 
 ## Account operations
 
 ### Create new named account
 
-	$ ./wal.js --accountNew NAME
+	$ waljs --accountNew NAME
 
 ### Set default account
 
-	$ ./wal.js --accountDefault NAME
+	$ waljs --accountDefault NAME
 
 ### List accounts and balances
 
-	$ ./wal.js --accountList
+	$ waljs --accountList
 
 ### Generate new bitcoin address from default account
 
-	$ ./wal.js --addressNew
+	$ waljs --addressNew
 
 ### List wallet transactions
 
-	$ ./wal.js --txList
+	$ waljs --txList
 
 ### Sync with network, detect new bitcoin payments
 
-	$ ./wal.js --syncHeaders
-	$ ./wal.js --scanBlocks
+	$ waljs --syncHeaders
+	$ waljs --scanBlocks
 
 ### Spend bitcoins
 
@@ -82,5 +89,5 @@ For commands and options, run
 			"btc": 0.001
 		}
 	}
-	$ ./wal.js --spend spend.json
+	$ waljs --spend spend.json
 
