@@ -9,6 +9,7 @@ function headers(p2pInfo, locators, callback)
 	var p2pcfg = {
 		host:	p2pInfo.host,
 		port:	p2pInfo.port,
+		network:p2pInfo.network,
 	};
 	var peer = new p2p.Peer(p2pcfg);
 	var timeoutId = null;
@@ -42,6 +43,7 @@ function getBlock(p2pInfo, hash, callback)
 	var p2pcfg = {
 		host:	p2pInfo.host,
 		port:	p2pInfo.port,
+		network:p2pInfo.network,
 	};
 	var peer = new p2p.Peer(p2pcfg);
 	var timeoutId = null;

@@ -19,7 +19,7 @@ program
 	.option('--cache <path>', 'Wallet cache file (def: cache-wal.json)')
 	.option('--cacheChain <path>', 'Blockchain cache file (def: cache-blocks.json)')
 	.option('--cacheNet <path>', 'P2P network cache file (def: cache-net.json)')
-	.option('--create', 'CMD: Create new wallet')
+	.option('--create <network>', 'CMD: Create new btc or tbtc wallet')
 	.option('--check', 'CMD: Validate wallet integrity')
 	.option('--accountNew <name>', 'CMD: Create new account')
 	.option('--accountDefault <name>', 'CMD: Set default account to <name>')
@@ -34,7 +34,7 @@ program
 	.option('--spend <path>', 'CMD: Create new transaction, spending UTXOs')
 	.parse(process.argv);
 
-var network = bitcore.Networks.livenet;
+var network = null;
 
 var wallet = null;
 var walletFn = program.file || 'keys-wal.json.aes';
@@ -65,10 +65,10 @@ function rpcInfoRead()
 	rpcInfoObj = JSON.parse(fs.readFileSync(rpcInfoFn, 'utf8'));
 }
 
-function cacheRead()
+function cacheRead(newWallet)
 {
 	// Read wallet cache
-	if (fs.existsSync(wcacheFn))
+	if (!newWallet && fs.existsSync(wcacheFn))
 		wcache = JSON.parse(fs.readFileSync(wcacheFn, 'utf8'));
 	else {
 		wcache = {
@@ -83,7 +83,7 @@ function cacheRead()
 	// Read blockchain cache
 	if (fs.existsSync(bcacheFn))
 		bcache = JSON.parse(fs.readFileSync(bcacheFn, 'utf8'));
-	else {
+	else if (network.name == "livenet") {
 		bcache = {
 			blocks: {
 			 "000000000000000001910d9f594aea0950d580d08c07ec324d0573bd3272ae86": {
@@ -97,6 +97,23 @@ function cacheRead()
 			bestBlock: "000000000000000001910d9f594aea0950d580d08c07ec324d0573bd3272ae86",
 		};
 		bcacheModified = true;
+	} else if (network.name == "testnet") {
+		bcache = {
+			blocks: {
+			 "00000000000005b00c1a2283a6f3d6f779f7e414558bd12dce882906b152b351": {
+				"height": 1156205,
+				"time": 1501816269,
+				"merkleroot": "5ec96203a251bc418feeaef8c917b22c05a1edde2ae5fa5b42d4a1d4618a0201",
+				"prevHash":null,
+			 }
+			},
+			firstScanBlock: "00000000000005b00c1a2283a6f3d6f779f7e414558bd12dce882906b152b351",
+			bestBlock: "00000000000005b00c1a2283a6f3d6f779f7e414558bd12dce882906b152b351",
+		};
+		bcacheModified = true;
+	} else {
+		console.error("unknown network to bcache");
+		return;
 	}
 
 	// Read network cache
@@ -161,6 +178,8 @@ function walletRead()
 	plaintext += ciph.final('utf8');
 
 	wallet = JSON.parse(plaintext);
+
+	network = bitcore.Networks.get(wallet.network);
 }
 
 function walletWrite()
@@ -185,8 +204,16 @@ function walletWrite()
 	modified = false;
 }
 
-function walletCreate()
+function walletCreate(networkCoin)
 {
+	network = bitcore.Networks.get(networkCoin);
+	if (network == undefined) {
+		console.error("Unknown network name");
+		return;
+	}
+
+	console.log("Creating a " + network.name + " wallet");
+
 	// Generate mnemonic code
 	var code = new Mnemonic();
 
@@ -195,6 +222,7 @@ function walletCreate()
 
 	var hdPrivateKey = code.toHDPrivateKey();
 	wallet = {
+		network: network.name,
 		version: 1000000,
 		privkeys: [
 			{ typ: "xpriv",
@@ -205,7 +233,10 @@ function walletCreate()
 		nextIndex: 0,
 	};
 
+	cacheRead(true);
+
 	cmdAccountNew("master");
+	cmdAccountAddress(true);
 
 	wallet.createTime = wallet.accounts["master"].createTime;
 
@@ -416,7 +447,8 @@ function cmdSyncHeaders()
 {
 	var p2pInfo = {
 		host:	'127.0.0.1',
-		port:	8333,
+		port:	network.port,
+		network: network,
 	};
 
 	var wantHeaders = true;
@@ -468,7 +500,7 @@ function scanTx(tx, blkhash)
 	// Scan outputs for addresses we know
 	for (var i = 0; i < tx.outputs.length; i++) {
 		var txout = tx.outputs[i];
-		var addr = txout.script.toAddress();
+		var addr = txout.script.toAddress(network);
 		if (addr && (addr.toString() in wcache.matchAddresses)) {
 
 			var id = tx.hash + "," + i.toString();
@@ -530,7 +562,8 @@ function cmdScanBlocks()
 {
 	var p2pInfo = {
 		host:	'127.0.0.1',
-		port:	8333,
+		port:	network.port,
+		network: network,
 	};
 
 	// If scan ptr not set, set to earliest known block
@@ -757,10 +790,11 @@ function cmdRescanPtr(hash)
 
 // Initialize configuration, read caches and key dbs
 if (program.create) {
-	walletCreate();
-} else
+	walletCreate(program.create);
+} else {
 	walletRead();
-cacheRead();
+	cacheRead(false);
+}
 
 // Execute specified command
 if (program.check)
