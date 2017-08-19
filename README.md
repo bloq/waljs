@@ -48,3 +48,7 @@ For commands and options, run
 	$ export WAL_SECRET="this is my secret encryption passphrase"
 	$ waljs --create
 
+## Compatibility
+
+See the [bitcoind RPC compatibility chart](bitcoind-compat.md).
+
