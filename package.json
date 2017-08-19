@@ -23,6 +23,7 @@
   "homepage": "https://github.com/bloq/waljs#readme",
   "dependencies": {
     "async": "^2.5.0",
+    "basic-auth": "^1.1.0",
     "bitcoind-rpc": "^0.7.0",
     "bitcore-lib": "^0.14.0",
     "bitcore-mnemonic": "^1.2.5",

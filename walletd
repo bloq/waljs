@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
+const http = require('http');
 const assert = require('assert');
 const fs = require('fs');
 const crypto = require('crypto');
 const dns = require('dns');
+const httputil = require('./httputil');
+const basicAuth = require('basic-auth');
 
 const program = require('commander');
 const async = require('async');
@@ -11,6 +14,16 @@ const bitcore = require('bitcore-lib');
 const Mnemonic = require('bitcore-mnemonic');
 const RpcClient = require('bitcoind-rpc');
 const p2preq = require('./p2preq');
+
+const listenPort = 8004;
+
+const jsonInputApis = {
+	"/": true,
+};
+
+const authApis = {
+	"/": true,
+};
 
 program
 	.version('0.0.1')
@@ -54,6 +67,40 @@ var netCacheModified = false;
 
 var rpcInfoFn = program.rpcinfo || 'rpc-info.json';
 var rpcInfoObj = null;
+
+function inputPrep(objInfo, req) {
+    objInfo.expectJson = (req.url in jsonInputApis);
+    objInfo.contentType = req.headers.content_type || 'application/octet-stream';
+    objInfo.hexDigest = '';
+    objInfo.jval = null;
+    objInfo.auth = null;
+    objInfo.data = null;
+    objInfo.body = '';
+    objInfo.input_hash = crypto.createHash('sha256');
+    objInfo.limit = (1 * 1000 * 1000);
+    objInfo.truncated = false;
+}
+
+function inputChunk(objInfo, chunk) {
+    // Do not read beyond input data limit
+    if (objInfo.body.length > objInfo.limit) {
+    	objInfo.truncated = true;
+    	return;
+    }
+
+    objInfo.body += chunk;
+    objInfo.input_hash.update(chunk);
+}
+
+function inputFinal(objInfo) {
+    objInfo.hexDigest = objInfo.input_hash.digest('hex');
+    if (objInfo.expectJson) {
+	objInfo.jval = JSON.parse(objInfo.body);
+    } else {
+    	objInfo.data = new Buffer(objInfo.body);
+    	objInfo.body = '';
+    }
+}
 
 function getUnixtime()
 {
@@ -337,7 +384,7 @@ function cmdAccountAddress(newAddr)
 	else {
 		if (acctObj.nextKey == 0) {
 			console.error("no key yet generated");
-			return;
+			return null;
 		}
 
 		keyIndex = acctObj.nextKey - 1;
@@ -360,7 +407,6 @@ function cmdAccountAddress(newAddr)
 
 	// Output [generated] address
 	var addressStr = address.toString();
-	console.log(addressStr);
 
 	// If creating a new address, store new cache entry
 	if (newAddr) {
@@ -379,6 +425,8 @@ function cmdAccountAddress(newAddr)
 		wcache.matchAddresses[addressStr] = matchObj;
 		wcacheModified = true;
 	}
+
+	return addressStr;
 }
 
 function cmdNetSeed()
@@ -784,6 +832,141 @@ function cmdRescanPtr(hash)
 	console.log("Block scan reset to " + hash);
 }
 
+function jreqGetAccountAddress(res, jreq)
+{
+	var params = jreq.params;
+
+	if ((!(Array.isArray(params))) ||
+	    (params.length < 1) ||
+	    (!(typeof params[0] === 'string'))) {
+	    	httputil.jrpcErr(jreq, res, -1, 'invalid params');
+		return;
+	}
+
+	var accountName = params[0];
+
+	if (!(accountName in wallet.accounts))
+		cmdAccountNew(accountName);
+	cmdAccountDefault(accountName);
+
+	var addr = cmdAccountAddress(true);
+
+	httputil.jrpcReply(jreq, res, addr);
+}
+
+function reqRoot(req, res, objInfo)
+{
+	var jreq = objInfo.jval;
+	if ((!('method' in jreq)) ||
+	    (!(typeof jreq.method === 'string')) ||
+	    (!('params' in jreq))) {
+	    	httputil.reply400(res, "method or params missing");
+		return;
+	}
+
+	var method = jreq.method;
+	if (method == 'getaccountaddress')
+		jreqGetAccountAddress(res, jreq);
+	else {
+	    	httputil.reply400(res, "unknown method");
+		return;
+	}
+}
+
+function checkAuth(chk_username, chk_secret, callback) {
+	const checkUser = 'user';
+	const checkSecret = 'pass';
+
+	if ((chk_username != checkUser) ||
+	    (chk_secret != checkSecret)) {
+		callback(null, false);
+		return;
+	}
+
+	// Return success
+	var authInfo = {
+		username: chk_username,
+	};
+	callback(null, true, authInfo);
+}
+
+// Process an HTTP request and response
+function httpRequest_2(req, res, authInfo)
+{
+	// Input body initialization
+        var objInfo = {};
+        inputPrep(objInfo, req);
+
+	// Buffer input data
+        req.on('data', function(chunk) {
+            inputChunk(objInfo, chunk);
+        });
+
+	// Request processing, following input data completion
+        req.on('end', function() {
+	    // Finalize and JSON parse etc.
+	    try {
+		objInfo.auth = authInfo;
+            	inputFinal(objInfo);
+	    }
+	    catch (e) {
+	    	httputil.reply400(res, "input invalid: " + e);
+		return;
+	    }
+
+	    //
+            // URI request dispatch
+	    //
+
+	    if (objInfo.truncated) {
+	    	httputil.reply400(res, "Input too large");
+
+            } else if (req.method == 'POST' && req.url == "/") {
+                reqRoot(req, res, objInfo);
+
+            } else {
+                httputil.reply404(res, 'URI not found');
+            }
+        });
+}
+
+function httpRequest(req, res)
+{
+	// Log timestamp and request
+	var today = new Date();
+	var todayStr= today.toISOString();
+	console.log(todayStr + " " + req.url);
+
+	// Authentication header
+	if (req.url in authApis) {
+		var auth = basicAuth(req);
+		if (!auth) {
+			httputil.reply403(res);
+			return;
+		}
+
+		checkAuth(auth.name, auth.pass, function(err,authOk,authInfo) {
+			// Internal service error
+			if (err) {
+				httputil.reply500(res, "http auth err: " + err);
+				return;
+			}
+
+			// Invalid username or secret
+			if (!authOk) {
+				httputil.reply403(res);
+				return;
+			}
+
+			// Continue HTTP request processing
+			httpRequest_2(req, res, authInfo);
+		});
+	} else {
+		// Continue HTTP request processing
+		httpRequest_2(req, res, null);
+	}
+}
+
 //
 // Main program operation starts here
 //
@@ -825,4 +1008,11 @@ else if (program.rescanPtr)
 // Flush caches and wallet db, if not already done so inline
 walletWrite();
 cacheWrite();
+
+const server = http.createServer(httpRequest);
+
+// start HTTP listener
+server.listen(listenPort, function() {
+  console.log("Server running at http://0.0.0.0:" + listenPort.toString() + "/");
+});
 
