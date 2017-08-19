@@ -27,7 +27,6 @@
     "bitcore-lib": "^0.14.0",
     "bitcore-mnemonic": "^1.2.5",
     "bitcore-p2p": "^1.1.2",
-    "commander": "^2.11.0",
-    "sqlite3": "^3.1.9"
+    "commander": "^2.11.0"
   }
 }
