@@ -84,8 +84,8 @@ function inputPrep(objInfo, req) {
 function inputChunk(objInfo, chunk) {
     // Do not read beyond input data limit
     if (objInfo.body.length > objInfo.limit) {
-    	objInfo.truncated = true;
-    	return;
+	objInfo.truncated = true;
+	return;
     }
 
     objInfo.body += chunk;
@@ -97,8 +97,8 @@ function inputFinal(objInfo) {
     if (objInfo.expectJson) {
 	objInfo.jval = JSON.parse(objInfo.body);
     } else {
-    	objInfo.data = new Buffer(objInfo.body);
-    	objInfo.body = '';
+	objInfo.data = new Buffer(objInfo.body);
+	objInfo.body = '';
     }
 }
 
@@ -829,6 +829,28 @@ function cmdRescanPtr(hash)
 	console.log("Block scan reset to " + hash);
 }
 
+function jreqGetAccount(res, jreq)
+{
+	var params = jreq.params;
+
+	if ((!(Array.isArray(params))) ||
+	    (params.length < 1) ||
+	    (!(typeof params[0] === 'string'))) {
+		httputil.jrpcErr(jreq, res, -1, 'invalid params');
+		return;
+	}
+
+	var address = params[0];
+
+	var resAcct = '';
+	if (address in wcache.matchAddresses) {
+		var matchObj = wcache.matchAddresses[address];
+		resAcct = matchObj.account;
+	}
+
+	httputil.jrpcReply(jreq, res, resAcct);
+}
+
 function jreqGetAccountAddress(res, jreq)
 {
 	var params = jreq.params;
@@ -836,7 +858,7 @@ function jreqGetAccountAddress(res, jreq)
 	if ((!(Array.isArray(params))) ||
 	    (params.length < 1) ||
 	    (!(typeof params[0] === 'string'))) {
-	    	httputil.jrpcErr(jreq, res, -1, 'invalid params');
+		httputil.jrpcErr(jreq, res, -1, 'invalid params');
 		return;
 	}
 
@@ -858,24 +880,37 @@ function jreqListAccounts(res, jreq)
 	httputil.jrpcReply(jreq, res, acctList);
 }
 
+var jrpcCallTable = {
+	getaccount: {
+		method: 'getaccount',
+		func: jreqGetAccount,
+	},
+	getaccountaddress: {
+		method: 'getaccountaddress',
+		func: jreqGetAccountAddress,
+	},
+	listaccounts: {
+		method: 'listaccounts',
+		func: jreqListAccounts,
+	},
+};
+
 function reqRoot(req, res, objInfo)
 {
 	var jreq = objInfo.jval;
 	if ((!('method' in jreq)) ||
 	    (!(typeof jreq.method === 'string')) ||
 	    (!('params' in jreq))) {
-	    	httputil.reply400(res, "method or params missing");
+		httputil.reply400(res, "method or params missing");
 		return;
 	}
 
 	var method = jreq.method;
-	if (method == 'getaccountaddress') {
-		jreqGetAccountAddress(res, jreq);
-	} else if (method == 'listaccounts') {
-		jreqListAccounts(res, jreq);
+	if (method in jrpcCallTable) {
+		var rpcInfo = jrpcCallTable[method];
+		rpcInfo.func(res, jreq);
 	} else {
-	    	httputil.reply400(res, "unknown method");
-		return;
+		httputil.reply400(res, "unknown method");
 	}
 }
 
@@ -913,10 +948,10 @@ function httpRequest_2(req, res, authInfo)
 	    // Finalize and JSON parse etc.
 	    try {
 		objInfo.auth = authInfo;
-            	inputFinal(objInfo);
+		inputFinal(objInfo);
 	    }
 	    catch (e) {
-	    	httputil.reply400(res, "input invalid: " + e);
+		httputil.reply400(res, "input invalid: " + e);
 		return;
 	    }
 
@@ -925,7 +960,7 @@ function httpRequest_2(req, res, authInfo)
 	    //
 
 	    if (objInfo.truncated) {
-	    	httputil.reply400(res, "Input too large");
+		httputil.reply400(res, "Input too large");
 
             } else if (req.method == 'POST' && req.url == "/") {
                 reqRoot(req, res, objInfo);
