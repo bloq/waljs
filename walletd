@@ -33,18 +33,6 @@ program
 	.option('--cacheChain <path>', 'Blockchain cache file (def: cache-blocks.json)')
 	.option('--cacheNet <path>', 'P2P network cache file (def: cache-net.json)')
 	.option('--create <network>', 'CMD: Create new btc or tbtc wallet')
-	.option('--check', 'CMD: Validate wallet integrity')
-	.option('--accountNew <name>', 'CMD: Create new account')
-	.option('--accountDefault <name>', 'CMD: Set default account to <name>')
-	.option('--accountList', 'CMD: List accounts and balances')
-	.option('--addressNew', 'CMD: Generate new address for default account')
-	.option('--addressLast', 'CMD: Show most recently generated address for default account')
-	.option('--txList', 'CMD: List wallet transactions')
-	.option('--seedNet', 'CMD: Seed network peer list via DNS')
-	.option('--syncHeaders', 'CMD: Cache block headers for best chain')
-	.option('--scanBlocks', 'CMD: Scan blocks for impactful UTXO activity')
-	.option('--rescanPtr <hash>', 'CMD: Reset block scan pointer to given hash')
-	.option('--spend <path>', 'CMD: Create new transaction, spending UTXOs')
 	.parse(process.argv);
 
 var network = null;
@@ -965,6 +953,10 @@ function httpRequest_2(req, res, authInfo)
             } else if (req.method == 'POST' && req.url == "/") {
                 reqRoot(req, res, objInfo);
 
+		// TODO - find better location for this + async
+		walletWrite();
+		cacheWrite();
+
             } else {
                 httputil.reply404(res, 'URI not found');
             }
@@ -1019,36 +1011,6 @@ if (program.create) {
 	walletRead();
 	cacheRead(false);
 }
-
-// Execute specified command
-if (program.check)
-	cmdCheck();
-else if (program.accountNew)
-	cmdAccountNew(program.accountNew);
-else if (program.accountDefault)
-	cmdAccountDefault(program.accountDefault);
-else if (program.accountList)
-	cmdAccountList();
-else if (program.addressNew)
-	cmdAccountAddress(true);
-else if (program.addressLast)
-	cmdAccountAddress(false);
-else if (program.seedNet)
-	cmdNetSeed();
-else if (program.syncHeaders)
-	cmdSyncHeaders();
-else if (program.scanBlocks)
-	cmdScanBlocks();
-else if (program.spend)
-	cmdSpend(program.spend);
-else if (program.txList)
-	cmdTxList();
-else if (program.rescanPtr)
-	cmdRescanPtr(program.rescanPtr);
-
-// Flush caches and wallet db, if not already done so inline
-walletWrite();
-cacheWrite();
 
 const server = http.createServer(httpRequest);
 
