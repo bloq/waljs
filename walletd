@@ -320,25 +320,22 @@ function cmdAccountList()
 {
 	// Generate list of wallets
 	var accts = {};
+	var satoshis = {};
 	Object.keys(wallet.accounts).forEach(function(acctName) {
-		var obj = {
-			name: acctName,
-			satoshis: 0,
-		};
-
-		accts[acctName] = obj;
+		accts[acctName] = 0;
+		satoshis[acctName] = 0;
 	});
 
 	// For each UTXO, assign to an account
 	for (var utxoId in wcache.unspent) {
 		var utxo = wcache.unspent[utxoId];
 		var addrInfo = wcache.matchAddresses[utxo.address];
-		accts[addrInfo.account].satoshis += utxo.satoshis;
-		accts[addrInfo.account].btc =
-			bitcore.Unit.fromSatoshis(accts[addrInfo.account].satoshis).toBTC();
+		satoshis[addrInfo.account] += utxo.satoshis;
+		accts[addrInfo.account] =
+			bitcore.Unit.fromSatoshis(satoshis[addrInfo.account]).toBTC();
 	}
 
-	console.log(JSON.stringify(accts, null, 2) + "\n");
+	return accts;
 }
 
 function cmdAccountNew(acctName)
@@ -854,6 +851,13 @@ function jreqGetAccountAddress(res, jreq)
 	httputil.jrpcReply(jreq, res, addr);
 }
 
+function jreqListAccounts(res, jreq)
+{
+	var acctList = cmdAccountList();
+
+	httputil.jrpcReply(jreq, res, acctList);
+}
+
 function reqRoot(req, res, objInfo)
 {
 	var jreq = objInfo.jval;
@@ -865,9 +869,11 @@ function reqRoot(req, res, objInfo)
 	}
 
 	var method = jreq.method;
-	if (method == 'getaccountaddress')
+	if (method == 'getaccountaddress') {
 		jreqGetAccountAddress(res, jreq);
-	else {
+	} else if (method == 'listaccounts') {
+		jreqListAccounts(res, jreq);
+	} else {
 	    	httputil.reply400(res, "unknown method");
 		return;
 	}
