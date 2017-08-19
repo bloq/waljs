@@ -10,8 +10,8 @@ no | yes | backupwallet | "destination"
 no | yes | bumpfee | "txid" ( options ) 
 no | yes | dumpprivkey | "address"
 no | yes | dumpwallet | "filename"
-no | yes | getaccount | "address"
-no | yes | getaccountaddress | "account"
+yes | yes | getaccount | "address"
+yes | yes | getaccountaddress | "account"
 no | yes | getaddressesbyaccount | "account"
 no | yes | getbalance | ( "account" minconf include_watchonly )
 no | yes | getnewaddress | ( "account" )
@@ -28,7 +28,7 @@ no | yes | importprunedfunds
 no | yes | importpubkey | "pubkey" ( "label" rescan )
 no | yes | importwallet | "filename"
 no | yes | keypoolrefill | ( newsize )
-no | yes | listaccounts | ( minconf include_watchonly)
+50% | yes | listaccounts | ( minconf include_watchonly)
 no | yes | listaddressgroupings
 no | yes | listlockunspent
 no | yes | listreceivedbyaccount | ( minconf include_empty include_watchonly)
@@ -44,7 +44,7 @@ no | yes | sendmany | "fromaccount" {"address":amount,...} ( minconf "comment" [
 no | yes | sendtoaddress | "address" amount ( "comment" "comment_to" subtractfeefromamount )
 no | yes | setaccount | "address" "account"
 no | yes | settxfee | amount
-no | yes | signmessage | "address" "message"
+yes | yes | signmessage | "address" "message"
 no | yes | walletlock
 no | yes | walletpassphrase | "passphrase" timeout
 no | yes | walletpassphrasechange | "oldpassphrase" "newpassphrase"
